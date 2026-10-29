@@ -400,6 +400,29 @@ EOF2
   [ "$(cd "$r" && find . \( -type f -o -type l \) -exec ls -l --time-style=+ {} + | sort; find . -type f -exec sha256sum {} + | sort)" = "$snap" ]
 }
 
+@test "app-05-identity.sh: no SUPPORTED file (VM cloud image) -> installs locales, then sets the locale" {
+  printf '#!/usr/bin/env bash\ncat >/dev/null\n' >"$STUBS/chpasswd"
+  make_cmd_stubs chown locale-gen update-locale
+  local r="$BATS_TEST_TMPDIR/r"
+  R_ID=$r
+  identity_root "$r"
+  rm "$r/usr/share/i18n/SUPPORTED"
+  cat >"$STUBS/apt-get" <<EOF2
+#!/usr/bin/env bash
+echo "apt-get \$*" >>"\$CALLS"
+if [ "\$1" = install ]; then printf 'de_DE.UTF-8 UTF-8\n' >"$r/usr/share/i18n/SUPPORTED"; fi
+EOF2
+  chmod +x "$STUBS/apt-get"
+  identity_env "$BATS_TEST_TMPDIR/build.env" USER_PASSWORD=x LOCALE=de_DE.UTF-8
+  run_identity
+  echo "$output"
+  [ "$status" -eq 0 ]
+  grep -qx 'apt-get update' "$CALLS"
+  grep -qx 'apt-get install -y --no-install-recommends locales' "$CALLS"
+  grep -qx 'de_DE.UTF-8 UTF-8' "$r/etc/locale.gen"
+  grep -qx 'update-locale LANG=de_DE.UTF-8' "$CALLS"
+}
+
 @test "app-05-identity.sh: without key no authorized_keys; unknown time zone -> warning, no link" {
   printf '#!/usr/bin/env bash\ncat >/dev/null\n' >"$STUBS/chpasswd"
   make_cmd_stubs chown locale-gen update-locale

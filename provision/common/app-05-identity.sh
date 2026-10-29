@@ -93,6 +93,13 @@ if [ -n "$locale" ]; then
   case "$locale" in
     *[!A-Za-z0-9_.@-]*) die "Invalid locale: $locale" ;;
   esac
+  # The Debian cloud image (VM) has no "locales" package, so SUPPORTED and locale-gen are missing.
+  # Install it here in the app layer, so the base cache key stays the same.
+  if [ ! -f "$R/usr/share/i18n/SUPPORTED" ]; then
+    DEBIAN_FRONTEND=noninteractive apt-get update </dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends locales </dev/null
+    log "locales installed"
+  fi
   entry=$(awk -v l="$locale" '$1 == l { print; exit }' "$R/usr/share/i18n/SUPPORTED" 2>/dev/null || true)
   [ -n "$entry" ] || die "Locale $locale is not in /usr/share/i18n/SUPPORTED"
   gen=$R/etc/locale.gen

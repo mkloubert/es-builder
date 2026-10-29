@@ -165,8 +165,9 @@ out/, secrets/            build output and CA key (git-ignored, written on the h
 - The builder container writes as root into the bind mounts. `owner_fix` in `builder/run.sh`
   gives the files back to the host user, so new output directories must be passed to it.
 - Only one build at a time, because of the flock on the cache volume `emulationstation-cache`.
-- The boot partition file `emulationstation.txt` (see `overlay/boot-template/`) is read once on
-  first boot by `firstboot`. A new key there needs parsing, validation and tests
+- The boot partition file `emulationstation.txt` (see `overlay/boot-template/`) is read by
+  `firstboot` at **every** boot, then renamed to `emulationstation.txt.applied` with passwords
+  masked. A new key there needs parsing, validation, masking (if secret) and tests
   (`test/bats/firstboot.bats`).
 - The games list mirrors EmulationStation: a `.m3u`/descriptor hides its files only if the system
   accepts the descriptor's extension. Keep the web UI and ES consistent.
