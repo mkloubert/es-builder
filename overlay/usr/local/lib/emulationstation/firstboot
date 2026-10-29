@@ -1,0 +1,493 @@
+#!/usr/bin/env bash
+# EmuStation Builder
+# Copyright (C) 2026  Marcel Joachim Kloubert
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# First boot setup. Runs as root at EVERY boot, before the network, ssh and the web service.
+#  1. Makes the SSH host keys if there are none. VM only: grows the root partition once
+#     (growpart + resize2fs, marker /var/lib/emulationstation/grown). Raspberry Pi OS grows
+#     the partition by itself.
+#  2. If BOOT_DIR/emulationstation.txt exists, applies it and renames it to
+#     emulationstation.txt.applied.
+#
+# The file is edited by the user on a FAT partition and is HOSTILE input:
+#  - it is parsed line by line and never sourced or evaluated;
+#  - values are literal. Only the key is trimmed. One pair of surrounding quotes is removed
+#    (same rule as builder/lib/config.sh). A trailing CR (Windows line end) and a BOM at the
+#    start of the file are removed. A value with a control character (except TAB) is ignored;
+#  - passwords only go through stdin (chpasswd, emulationstation-web credentials). They are
+#    never put in an argument, an environment variable or the log;
+#  - the log names keys and checked values only (host name, SSID), never passwords.
+#
+# The file is checked at every boot. When it has been used, it is renamed even if some steps
+# failed (the failed keys are listed in the .applied copy). Otherwise the passwords would stay
+# in the clear on the boot partition and every boot would repeat the failed steps.
+# The .applied copy cannot have the mode 0600 on FAT. Everyone who holds the card can read
+# it, so every value of a key with PASSWORD in its name is replaced by ***.
+# Exit code: 0, or 1 if a system command failed (invalid user input is not an error here).
+#
+# Settings (environment overrides for tests; the defaults are the real tools):
+#   ROOT (/), BOOT_DIR, TARGET_KIND (rpi4|vm); if not set, both come from
+#   $ROOT/usr/local/lib/emulationstation/firstboot.conf, written by provision/common/app-40-firstboot.sh.
+#   CHPASSWD, EW_BIN, WIFI_COUNTRY_CMD, SSH_KEYGEN, GROWPART, RESIZE2FS, FINDMNT, LSBLK, SYS_BLOCK,
+#   OPENSSL, CHOWN, SETUPCON, HOSTNAME_CMD, RFKILL, BUILD_WIFI_COUNTRY, NMWIFI_LIB.
+#   firstboot.conf may also have WIFI_COUNTRY (the country of the build, Raspberry Pi only).
+set -euo pipefail
+export LC_ALL=C
+
+ROOT=${ROOT:-/}
+R=${ROOT%/}
+USER_NAME=emulationstation
+CONF_DIR=$R/usr/local/lib/emulationstation
+WEB_DIR=$R/etc/emulationstation-web
+WEB_CONF=$WEB_DIR/web.conf
+STATE_DIR=$R/var/lib/emulationstation
+MAX_FILE_BYTES=65536
+MAX_VALUE_CHARS=1024
+
+log() { printf '[firstboot] %s\n' "$*" >&2; }
+
+# Wi-Fi helpers, shared with the build (provision/common/app-15-network.sh)
+# shellcheck source=overlay/usr/local/lib/emulationstation/nmwifi.sh
+. "${NMWIFI_LIB:-$(dirname "${BASH_SOURCE[0]}")/nmwifi.sh}"
+
+# --- Settings ---------------------------------------------------------------------
+
+# read_conf : TARGET_KIND and BOOT_DIR from firstboot.conf, unless set in the environment.
+read_conf() {
+  local f=$CONF_DIR/firstboot.conf line key val
+  [ -f "$f" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    key=${line%%=*}
+    val=${line#*=}
+    case "$key" in
+      TARGET_KIND) [ -n "${TARGET_KIND-}" ] || TARGET_KIND=$val ;;
+      BOOT_DIR) [ -n "${BOOT_DIR-}" ] || BOOT_DIR=$val ;;
+      WIFI_COUNTRY) [ -n "${BUILD_WIFI_COUNTRY-}" ] || BUILD_WIFI_COUNTRY=$val ;;
+    esac
+  done <"$f"
+}
+read_conf
+TARGET_KIND=${TARGET_KIND:-rpi4}
+BUILD_WIFI_COUNTRY=${BUILD_WIFI_COUNTRY:-}
+nmwifi_country_ok "$BUILD_WIFI_COUNTRY" || BUILD_WIFI_COUNTRY=
+case "$TARGET_KIND" in
+  rpi4) BOOT_DIR=${BOOT_DIR:-/boot/firmware} ;;
+  vm) BOOT_DIR=${BOOT_DIR:-/boot/efi} ;;
+  *)
+    log "ERROR: unknown TARGET_KIND"
+    exit 1
+    ;;
+esac
+
+CHPASSWD=${CHPASSWD:-chpasswd}
+EW_BIN=${EW_BIN:-$R/usr/local/bin/emulationstation-web}
+SSH_KEYGEN=${SSH_KEYGEN:-ssh-keygen}
+GROWPART=${GROWPART:-growpart}
+RESIZE2FS=${RESIZE2FS:-resize2fs}
+FINDMNT=${FINDMNT:-findmnt}
+LSBLK=${LSBLK:-lsblk}
+SYS_BLOCK=${SYS_BLOCK:-/sys/class/block}
+OPENSSL=${OPENSSL:-openssl}
+CHOWN=${CHOWN:-chown}
+RFKILL=${RFKILL:-rfkill}
+if [ -n "${WIFI_COUNTRY_CMD-}" ]; then
+  :
+elif command -v raspi-config >/dev/null 2>&1; then
+  WIFI_COUNTRY_CMD="raspi-config nonint do_wifi_country"
+else
+  WIFI_COUNTRY_CMD="iw reg set"
+fi
+# These two change the running system. With a fake root (tests) they do nothing by default.
+if [ -z "$R" ]; then
+  SETUPCON=${SETUPCON:-setupcon}
+  HOSTNAME_CMD=${HOSTNAME_CMD:-hostname}
+else
+  SETUPCON=${SETUPCON:-true}
+  HOSTNAME_CMD=${HOSTNAME_CMD:-true}
+fi
+
+# Problems are collected and written to the .applied copy.
+#  skip <KEY> <reason> : invalid input, ignored (no error)
+#  fail <KEY> <reason> : a system command failed (exit code 1)
+NOTES=()
+FAILS=0
+WIFI_WRITTEN=0
+skip() {
+  log "$1: $2, ignored"
+  NOTES+=("# NOT APPLIED: $1: $2")
+}
+fail() {
+  log "ERROR: $1: $2"
+  NOTES+=("# NOT APPLIED: $1: $2")
+  FAILS=$((FAILS + 1))
+}
+
+# --- Step 1: SSH host keys and growing the root partition -----------------------------
+
+ensure_host_keys() {
+  local k
+  for k in "$R"/etc/ssh/ssh_host_*_key; do
+    [ -e "$k" ] && return 0
+  done
+  log "Making SSH host keys"
+  if [ -n "$R" ]; then
+    "$SSH_KEYGEN" -A -f "$R" </dev/null || fail "ssh host keys" "ssh-keygen -A failed"
+  else
+    "$SSH_KEYGEN" -A </dev/null || fail "ssh host keys" "ssh-keygen -A failed"
+  fi
+}
+
+grow_root() {
+  [ "$TARGET_KIND" = vm ] || return 0
+  [ ! -e "$STATE_DIR/grown" ] || return 0
+  local src name disk part out rc=0
+  src=$("$FINDMNT" -no SOURCE / 2>/dev/null) || src=
+  name=${src##*/}
+  disk=$("$LSBLK" -no PKNAME "$src" 2>/dev/null | head -n 1) || disk=
+  part=$(cat "$SYS_BLOCK/$name/partition" 2>/dev/null) || part=
+  if [ -z "$name" ] || [ -z "$disk" ] || ! [[ $part =~ ^[0-9]+$ ]]; then
+    fail "grow root" "cannot find the root partition (source '$src')"
+    return 0
+  fi
+  log "Growing /dev/$disk partition $part"
+  out=$("$GROWPART" "/dev/$disk" "$part" </dev/null 2>&1) || rc=$?
+  if [ "$rc" -ne 0 ] && [[ $out != *NOCHANGE* ]]; then
+    log "$out"
+    fail "grow root" "growpart failed"
+    return 0
+  fi
+  if ! "$RESIZE2FS" "$src" </dev/null; then
+    fail "grow root" "resize2fs failed"
+    return 0
+  fi
+  mkdir -p "$STATE_DIR"
+  : >"$STATE_DIR/grown"
+}
+
+# --- Step 2: parse the file -----------------------------------------------------------
+
+ALLOWED=" HOSTNAME WIFI_SSID WIFI_PASSWORD WIFI_COUNTRY TIMEZONE KEYMAP USER_PASSWORD WEB_USER WEB_PASSWORD "
+declare -A VAL=()
+OUT=()
+
+has_ctrl() {
+  local t=${1//$'\t'/}
+  [[ $t == *[[:cntrl:]]* ]]
+}
+
+# parse_file <file> : fills VAL (valid values only) and OUT (lines of the .applied copy)
+parse_file() {
+  local file=$1 line key val first last n=0 shown rest
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1))
+    if [ "$n" -eq 1 ]; then line=${line#$'\xEF\xBB\xBF'}; fi
+    while [ "${line: -1}" = $'\r' ]; do line=${line%$'\r'}; done
+    shown=${line#"${line%%[![:space:]]*}"}
+    if [ -z "$shown" ]; then
+      OUT+=("$line")
+      continue
+    fi
+    if [[ $shown == "#"* ]]; then
+      # A comment that looks like "# KEY=value" may hold a password the user forgot to
+      # uncomment. Mask it if the key name has PASSWORD in it.
+      rest=${shown#"#"}
+      rest=${rest#"${rest%%[![:space:]]*}"}
+      if [[ $rest == *=* ]]; then
+        key=${rest%%=*}
+        key=${key%"${key##*[![:space:]]}"}
+        if [[ ${key^^} == *PASSWORD* ]]; then
+          OUT+=("#$key=***")
+          continue
+        fi
+      fi
+      # Any other comment that mentions a password (prose, "KEY: value", ...) is dropped.
+      if [[ ${line^^} == *PASSWORD* ]]; then
+        OUT+=("# (comment removed: it mentions a password)")
+        continue
+      fi
+      OUT+=("$line")
+      continue
+    fi
+    if [[ $shown != *=* ]]; then
+      log "line $n has no '=', ignored"
+      OUT+=("# line $n has no '=' and was removed")
+      continue
+    fi
+    key=${shown%%=*}
+    val=${shown#*=}
+    key=${key%"${key##*[![:space:]]}"}
+    # The .applied copy never holds a value of a key that was not understood: a misspelled
+    # password key is the likely case.
+    if [[ -z $key || $key == [!A-Z]* || $key == *[!A-Z0-9_]* ]]; then
+      log "line $n has an invalid key, ignored"
+      if [[ ${key^^} == *PASSWORD* ]]; then
+        OUT+=("$key=***")
+      else
+        OUT+=("# line $n has an invalid key and was removed")
+      fi
+      continue
+    fi
+    if [[ $ALLOWED != *" $key "* ]]; then
+      log "unknown key $key ignored"
+      OUT+=("$key=*** (unknown key)")
+      continue
+    fi
+    if [[ ${key^^} == *PASSWORD* ]]; then
+      OUT+=("$key=***")
+    else
+      OUT+=("$key=$val")
+    fi
+    if [ "${#val}" -ge 2 ]; then
+      first=${val:0:1}
+      last=${val: -1}
+      if { [ "$first" = '"' ] && [ "$last" = '"' ]; } || { [ "$first" = "'" ] && [ "$last" = "'" ]; }; then
+        val=${val:1:${#val}-2}
+      fi
+    fi
+    if has_ctrl "$val"; then
+      skip "$key" "the value has a control character"
+      continue
+    fi
+    if [ "${#val}" -gt "$MAX_VALUE_CHARS" ]; then
+      skip "$key" "the value is too long"
+      continue
+    fi
+    VAL[$key]=$val
+  done <"$file"
+}
+
+# --- Step 3: apply --------------------------------------------------------------------
+
+# tls_check <host> : warns if the host name is not in the server certificate (spec section 7)
+tls_check() {
+  local host=$1 cert=$WEB_DIR/tls/server.crt sans names n missing=()
+  if [ ! -r "$cert" ] || ! sans=$("$OPENSSL" x509 -in "$cert" -noout -ext subjectAltName 2>/dev/null); then
+    log "NOTE: cannot read the subject alternative names of the server certificate, host name not checked"
+    return 0
+  fi
+  names=$(grep -o 'DNS:[^,[:space:]]*' <<<"$sans" | sed 's/^DNS://' | tr '[:upper:]' '[:lower:]' || true)
+  for n in "$host" "$host.local"; do
+    grep -qxF "$n" <<<"$names" || missing+=("$n")
+  done
+  if [ "${#missing[@]}" -gt 0 ]; then
+    log "WARNING: the server certificate is not valid for ${missing[*]}. The browser will show a certificate warning. Use a host name from HOSTNAME or TLS_EXTRA_SANS in build.conf, or build the image again."
+  fi
+}
+
+apply_hostname() {
+  local host=${VAL[HOSTNAME]-} old hosts
+  [ "${VAL[HOSTNAME]+set}" ] || return 0
+  if [ -z "$host" ]; then skip HOSTNAME "the value is empty"; return 0; fi
+  if ! [[ $host =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
+    skip HOSTNAME "the value is not a valid host name (a-z, 0-9, -; up to 63 characters)"
+    return 0
+  fi
+  mkdir -p "$R/etc"
+  old=$(cat "$R/etc/hostname" 2>/dev/null || true)
+  printf '%s\n' "$host" >"$R/etc/hostname"
+  hosts=$R/etc/hosts
+  touch "$hosts"
+  grep -v '^127\.0\.1\.1[[:space:]]' "$hosts" >"$hosts.new" || true
+  printf '127.0.1.1\t%s\n' "$host" >>"$hosts.new"
+  cat "$hosts.new" >"$hosts"
+  rm -f "$hosts.new"
+  "$HOSTNAME_CMD" "$host" </dev/null || log "NOTE: could not set the running host name; it applies at the next boot"
+  log "Host name $host"
+  if [ "$old" != "$host" ]; then tls_check "$host"; fi
+}
+
+apply_wifi() {
+  local nm=$R$NMWIFI_FILE ssid psk
+  if [ "${VAL[WIFI_PASSWORD]+set}" ] && ! [ "${VAL[WIFI_SSID]+set}" ]; then
+    skip WIFI_PASSWORD "WIFI_SSID is missing"
+    return 0
+  fi
+  [ "${VAL[WIFI_SSID]+set}" ] || return 0
+  ssid=${VAL[WIFI_SSID]}
+  if [ -z "$ssid" ]; then
+    rm -f "$nm"
+    log "Wi-Fi setting removed"
+    return 0
+  fi
+  if ! nmwifi_ssid_ok "$ssid"; then skip WIFI_SSID "the SSID is longer than 32 bytes"; return 0; fi
+  if ! [ "${VAL[WIFI_PASSWORD]+set}" ] || [ -z "${VAL[WIFI_PASSWORD]}" ]; then
+    skip WIFI_PASSWORD "missing (open networks are not supported)"
+    return 0
+  fi
+  psk=${VAL[WIFI_PASSWORD]}
+  if ! nmwifi_psk_ok "$psk"; then
+    skip WIFI_PASSWORD "must have 8 to 63 printable ASCII characters, or 64 hex digits"
+    return 0
+  fi
+  if ! nmwifi_write "$nm" "$ssid" "$psk"; then
+    fail WIFI_SSID "could not write the NetworkManager file"
+    return 0
+  fi
+  WIFI_WRITTEN=1
+  log "Wi-Fi setting written for SSID $ssid"
+}
+
+# set_country <code> <key> : runs the country command (raspi-config also unblocks wlan)
+set_country() {
+  local cmd
+  read -ra cmd <<<"$WIFI_COUNTRY_CMD"
+  if "${cmd[@]}" "$1" </dev/null; then
+    log "Wi-Fi country $1"
+  else
+    fail "$2" "the country command failed"
+  fi
+}
+
+# apply_country : WIFI_COUNTRY from the file. Raspberry Pi OS blocks Wi-Fi (rfkill) until a
+# country is set. So when the file sets a Wi-Fi network without WIFI_COUNTRY, the country of
+# the build (firstboot.conf) is used, and wlan is unblocked in any case.
+apply_country() {
+  local cc=${VAL[WIFI_COUNTRY]-}
+  if ! [ "${VAL[WIFI_COUNTRY]+set}" ]; then
+    if [ "$TARGET_KIND" != rpi4 ] || [ "$WIFI_WRITTEN" -ne 1 ]; then return 0; fi
+    if [ -n "$BUILD_WIFI_COUNTRY" ]; then
+      log "WIFI_COUNTRY is not set, using the country of the build"
+      set_country "$BUILD_WIFI_COUNTRY" WIFI_COUNTRY
+    else
+      log "NOTE: no Wi-Fi country is set (WIFI_COUNTRY). Wi-Fi may not work well on the Raspberry Pi."
+    fi
+    "$RFKILL" unblock wlan </dev/null || fail WIFI_COUNTRY "rfkill unblock wlan failed"
+    return 0
+  fi
+  if [ "$TARGET_KIND" != rpi4 ]; then
+    log "WIFI_COUNTRY is only used on the Raspberry Pi, ignored"
+    return 0
+  fi
+  if ! nmwifi_country_ok "$cc"; then skip WIFI_COUNTRY "must be two capital letters"; return 0; fi
+  set_country "$cc" WIFI_COUNTRY
+}
+
+apply_timezone() {
+  local tz=${VAL[TIMEZONE]-}
+  [ "${VAL[TIMEZONE]+set}" ] || return 0
+  case "$tz" in
+    "" | /* | *..* | *[!A-Za-z0-9_+/-]*) skip TIMEZONE "not a valid time zone name"; return 0 ;;
+  esac
+  if [ ! -f "$R/usr/share/zoneinfo/$tz" ]; then
+    skip TIMEZONE "unknown time zone"
+    return 0
+  fi
+  ln -sfn "/usr/share/zoneinfo/$tz" "$R/etc/localtime"
+  printf '%s\n' "$tz" >"$R/etc/timezone"
+  log "Time zone $tz"
+}
+
+apply_keymap() {
+  local km=${VAL[KEYMAP]-} kb=$R/etc/default/keyboard
+  [ "${VAL[KEYMAP]+set}" ] || return 0
+  if [ -z "$km" ] || [[ $km == *[!a-z0-9,_-]* ]]; then skip KEYMAP "not a valid keyboard layout"; return 0; fi
+  mkdir -p "$R/etc/default"
+  touch "$kb"
+  if grep -q '^XKBLAYOUT=' "$kb"; then
+    sed -i "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$km\"/" "$kb"
+  else
+    printf 'XKBLAYOUT="%s"\n' "$km" >>"$kb"
+  fi
+  "$SETUPCON" </dev/null >/dev/null 2>&1 || log "NOTE: setupcon did not run; the layout applies at the next boot"
+  log "Keyboard layout $km"
+}
+
+apply_user_password() {
+  [ "${VAL[USER_PASSWORD]+set}" ] || return 0
+  if [ -z "${VAL[USER_PASSWORD]}" ]; then skip USER_PASSWORD "the value is empty"; return 0; fi
+  if printf '%s:%s\n' "$USER_NAME" "${VAL[USER_PASSWORD]}" | "$CHPASSWD"; then
+    log "Password set for $USER_NAME"
+  else
+    fail USER_PASSWORD "chpasswd failed (the system may refuse the password)"
+  fi
+}
+
+# The CLI can change the user and the password separately, so each one is passed on as it is.
+apply_web() {
+  local user=${VAL[WEB_USER]-} pw=${VAL[WEB_PASSWORD]-} args=() ok=0
+  [ "${VAL[WEB_USER]+set}" ] && [ -z "$user" ] && { skip WEB_USER "the value is empty"; unset 'VAL[WEB_USER]'; }
+  [ "${VAL[WEB_PASSWORD]+set}" ] && [ -z "$pw" ] && { skip WEB_PASSWORD "the value is empty"; unset 'VAL[WEB_PASSWORD]'; }
+  [ "${VAL[WEB_USER]+set}" ] || [ "${VAL[WEB_PASSWORD]+set}" ] || return 0
+  if [ ! -f "$WEB_CONF" ]; then
+    fail WEB_USER "web.conf is missing; web login not changed"
+    return 0
+  fi
+  args=(credentials --config "$WEB_CONF")
+  [ "${VAL[WEB_USER]+set}" ] && args+=("--user=$user")
+  if [ "${VAL[WEB_PASSWORD]+set}" ]; then
+    args+=(--password-stdin)
+    printf '%s\n' "$pw" | "$EW_BIN" "${args[@]}" || ok=1
+  else
+    "$EW_BIN" "${args[@]}" </dev/null || ok=1
+  fi
+  if [ "$ok" -eq 0 ]; then log "Web login changed"; else fail WEB_USER "emulationstation-web credentials failed"; fi
+  # The service saves web.conf as its own user (ruling R10): always restore owner and mode.
+  "$CHOWN" "$USER_NAME:$USER_NAME" "$WEB_CONF" || true
+  chmod 0600 "$WEB_CONF" || true
+}
+
+# --- Step 4: the .applied copy ----------------------------------------------------------
+
+finish_file() {
+  local file=$1 applied=$1.applied tmp line
+  tmp=$BOOT_DIR/.emulationstation.txt.applied.new
+  {
+    for line in "${OUT[@]+"${OUT[@]}"}"; do printf '%s\n' "$line"; done
+    for line in "${NOTES[@]+"${NOTES[@]}"}"; do printf '%s\n' "$line"; done
+  } >"$tmp"
+  if ! mv -f "$tmp" "$applied"; then
+    rm -f "$tmp"
+    log "ERROR: could not write $applied; the file stays and is read again at the next boot"
+    FAILS=$((FAILS + 1))
+    return 0
+  fi
+  rm -f "$file" || {
+    log "ERROR: could not remove $file (read-only boot partition?); it is read again at the next boot"
+    FAILS=$((FAILS + 1))
+  }
+}
+
+process_file() {
+  local file=$BOOT_DIR/emulationstation.txt size
+  if [ ! -f "$file" ] || [ -L "$file" ]; then return 0; fi
+  size=$(wc -c <"$file")
+  if [ "$size" -gt "$MAX_FILE_BYTES" ]; then
+    log "emulationstation.txt is too large ($size bytes), ignored"
+    return 0
+  fi
+  log "Applying emulationstation.txt"
+  parse_file "$file"
+  apply_hostname
+  apply_wifi
+  apply_country
+  apply_timezone
+  apply_keymap
+  apply_user_password
+  apply_web
+  finish_file "$file"
+}
+
+main() {
+  ensure_host_keys
+  grow_root
+  process_file
+  [ "$FAILS" -eq 0 ] || exit 1
+  exit 0
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  main "$@"
+fi

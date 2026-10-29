@@ -1,0 +1,37 @@
+{{- /*
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/ -}}
+{{define "syslog"}}{{if .Error}}<div role="alert" class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">The log of {{.Label}} could not be read.</div>
+{{else if .Text}}<pre class="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-300">{{.Text}}</pre>
+{{else}}<p class="text-sm text-zinc-500">No entries.</p>{{end}}{{end}}
+
+{{define "bans"}}<div id="bans" hx-get="/partials/bans" hx-trigger="bans-updated from:body" hx-swap="outerHTML">
+{{if .Error}}<div role="alert" class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">The ban list could not be read.</div>
+{{else if .Bans}}
+<ul class="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+  {{range .Bans}}
+  <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+    <div class="min-w-0"><p class="font-mono text-sm">{{.IP}}</p><p class="text-xs text-zinc-500">{{.Jail}}</p></div>
+    <form method="post" action="/system/unban" hx-post="/system/unban" hx-swap="none" hx-confirm="Allow {{.IP}} again?">
+      <input type="hidden" name="ip" value="{{.IP}}">
+      <button class="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Unban</button>
+    </form>
+  </li>
+  {{end}}
+</ul>
+{{else}}<div class="rounded-xl border border-dashed border-zinc-700 p-8 text-center text-sm text-zinc-400">No banned addresses.</div>{{end}}
+</div>{{end}}

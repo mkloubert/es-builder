@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<gameList>
+  <game id="12" source="ScreenScraper">
+    <path>./Super Mario World.sfc</path>
+    <name>Super Mario World</name>
+    <favorite>true</favorite>
+    <playcount>3</playcount>
+    <customtag foo="bar">x &amp; y</customtag>
+  </game>
+  <game>
+    <path>./Zelda.sfc</path>
+    <name>Zelda</name>
+  </game>
+</gameList>

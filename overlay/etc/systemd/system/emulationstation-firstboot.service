@@ -1,0 +1,40 @@
+# EmuStation Builder
+# Copyright (C) 2026  Marcel Joachim Kloubert
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# First boot setup. It runs at EVERY boot (no ConditionPathExists): it makes the SSH host keys,
+# grows the root partition (VM only, once) and applies emulationstation.txt from the boot
+# partition if the file exists. It runs before the network, the web service and ssh.
+# RequiresMountsFor= for the boot partition comes from the drop-in written by
+# provision/common/app-40-firstboot.sh (the path differs per target).
+# ssh.socket is not ordered here on purpose: it is disabled in the image, and with the default
+# dependencies of this unit an order before ssh.socket would make a cycle (sockets.target).
+# Raspberry Pi OS has its own regenerate_ssh_host_keys.service (removes the keys and runs
+# ssh-keygen -A). This unit waits for it, so the two never make keys at the same time. On the VM
+# that unit does not exist; then the order has no effect.
+[Unit]
+Description=EmuStation first boot setup
+After=local-fs.target regenerate_ssh_host_keys.service
+Before=network-pre.target emulationstation-web.service ssh.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=10min
+ExecStart=/usr/local/lib/emulationstation/firstboot
+
+[Install]
+WantedBy=multi-user.target

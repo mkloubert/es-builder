@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- test fixture: one device with the GUID with and without CRC -->
+<inputList>
+  <inputConfig type="joystick" deviceName="Pad A" vendorId="43690" productId="1" deviceGUID="0300abcdaaaa00000100000001000000">
+    <input name="a" type="button" id="1" value="1"/>
+    <input name="up" type="hat" id="0" value="1"/>
+  </inputConfig>
+  <inputConfig type="joystick" deviceName="Pad A" vendorId="43690" productId="1" deviceGUID="03000000aaaa00000100000001000000">
+    <input name="a" type="button" id="1" value="1"/>
+    <input name="up" type="hat" id="0" value="1"/>
+  </inputConfig>
+</inputList>

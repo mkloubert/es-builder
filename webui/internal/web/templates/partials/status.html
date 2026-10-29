@@ -1,0 +1,72 @@
+{{- /*
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/ -}}
+{{define "status"}}<div id="status" class="grid gap-4 md:grid-cols-2" hx-get="/partials/status" hx-trigger="every 5s [!document.body.classList.contains('confirming')]" hx-swap="outerHTML">
+  <section class="rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:p-6" aria-labelledby="es-title">
+    <h2 id="es-title" class="text-sm font-medium uppercase tracking-wider text-zinc-400">Status</h2>
+    <div class="mt-4 flex items-center gap-3">
+      {{if eq .State.Kind "game"}}
+        <span class="h-3 w-3 rounded-full bg-red-500 shadow-[0_0_12px] shadow-red-500/60"></span>
+        <div class="min-w-0">
+          <p class="text-lg font-semibold">Game running</p>
+          <p class="truncate text-sm text-zinc-300" title="{{.ROMName}}">{{.ROMName}}</p>
+          {{if .SystemName}}<p class="text-xs text-zinc-500">{{.SystemName}}</p>{{end}}
+        </div>
+      {{else if eq .State.Kind "es"}}
+        <span class="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_12px] shadow-emerald-400/50"></span>
+        <p class="text-lg font-semibold">EmulationStation is running</p>
+      {{else if eq .State.Kind "stopped"}}
+        <span class="h-3 w-3 rounded-full bg-zinc-500"></span>
+        <p class="text-lg font-semibold">EmulationStation stopped</p>
+      {{else}}
+        <span class="h-3 w-3 rounded-full bg-amber-400"></span>
+        <p class="text-lg font-semibold">Status unknown</p>
+      {{end}}
+    </div>
+    <div class="mt-6 flex flex-wrap gap-3">
+      {{if eq .State.Kind "game"}}
+      <form method="post" action="/game/stop" hx-post="/game/stop" hx-target="#status" hx-swap="outerHTML" hx-confirm="The running game will be stopped. Unsaved progress will be lost.">
+        <button class="rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Stop game</button>
+      </form>
+      {{end}}
+      <form method="post" action="/es/restart" hx-post="/es/restart" hx-target="#status" hx-swap="outerHTML" hx-confirm="EmulationStation is restarting.">
+        <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Restart ES</button>
+      </form>
+      {{if eq .State.Kind "stopped"}}
+      <form method="post" action="/es/start" hx-post="/es/start" hx-target="#status" hx-swap="outerHTML">
+        <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Start ES</button>
+      </form>
+      {{else}}
+      <form method="post" action="/es/stop" hx-post="/es/stop" hx-target="#status" hx-swap="outerHTML" hx-confirm="EmulationStation will be stopped and stays off until you start it again.">
+        <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Stop ES</button>
+      </form>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:p-6" aria-labelledby="dev-title">
+    <h2 id="dev-title" class="text-sm font-medium uppercase tracking-wider text-zinc-400">Device</h2>
+    <dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
+      <dt class="text-zinc-400">Hostname</dt><dd class="text-right font-medium">{{if .Info.Hostname}}{{.Info.Hostname}}{{else}}–{{end}}</dd>
+      <dt class="text-zinc-400">CPU temperature</dt><dd class="text-right font-medium">{{if .Info.HasTemp}}{{printf "%.1f" .Info.TempC}} °C{{else}}–{{end}}</dd>
+      <dt class="text-zinc-400">Load</dt><dd class="text-right font-medium">{{printf "%.2f" .Info.Load1}}</dd>
+      <dt class="text-zinc-400">RAM</dt><dd class="text-right font-medium">{{if .Info.MemTotal}}{{bytes (sub .Info.MemTotal .Info.MemAvail)}} / {{bytes .Info.MemTotal}}{{else}}–{{end}}</dd>
+      <dt class="text-zinc-400">Free storage</dt><dd class="text-right font-medium">{{if .Info.DiskTotal}}{{bytes .Info.DiskFree}} of {{bytes .Info.DiskTotal}}{{else}}–{{end}}</dd>
+      <dt class="text-zinc-400">IP addresses</dt><dd class="text-right font-medium">{{if .Info.IPs}}{{range .Info.IPs}}<span class="block">{{.}}</span>{{end}}{{else}}–{{end}}</dd>
+    </dl>
+  </section>
+</div>{{end}}

@@ -1,0 +1,51 @@
+# EmuStation Builder
+# Copyright (C) 2026  Marcel Joachim Kloubert
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+lr-fceumm
+lr-snes9x
+lr-gambatte
+lr-mgba
+lr-beetle-vb
+lr-gw
+lr-genesis-plus-gx
+lr-picodrive
+lr-beetle-pce-fast
+lr-beetle-supergrafx
+lr-fbneo
+lr-mame2003-plus
+lr-beetle-ngp
+lr-beetle-wswan
+lr-stella2014
+lr-atari800
+lr-prosystem
+lr-handy
+hatari
+vice
+amiberry
+lr-caprice32
+lr-fuse
+lr-bluemsx
+linapple
+lr-px68k
+jzintv
+lr-vecx
+dosbox
+scummvm
+lr-pcsx-rearmed
+lr-flycast
+ppsspp
+mupen64plus
+lr-mupen64plus-next

@@ -1,0 +1,66 @@
+{
+   "blockdevices": [
+      {
+         "path": "/dev/sda",
+         "pkname": null,
+         "tran": "usb",
+         "fstype": null,
+         "size": 16000000000,
+         "label": null,
+         "type": "disk",
+         "mountpoints": [
+            null
+         ],
+         "children": [
+            {
+               "path": "/dev/sda1",
+               "pkname": "sda",
+               "tran": null,
+               "fstype": "vfat",
+               "size": 15999000000,
+               "label": "A\tB\u0001C",
+               "type": "part",
+               "mountpoints": [
+                  null
+               ]
+            },
+            {
+               "path": "/dev/sda2",
+               "pkname": "sda",
+               "tran": null,
+               "fstype": "exfat",
+               "size": 1000000,
+               "label": null,
+               "type": "part",
+               "mountpoints": [
+                  null
+               ]
+            },
+            {
+               "path": "/dev/sda3",
+               "pkname": "sda",
+               "tran": null,
+               "fstype": "ext4",
+               "size": 1000000,
+               "label": "LINUX",
+               "type": "part",
+               "mountpoints": [
+                  null
+               ]
+            },
+            {
+               "path": "/dev/sda4",
+               "pkname": "sda",
+               "tran": null,
+               "fstype": "ntfs",
+               "size": 2000000,
+               "label": "NT",
+               "type": "part",
+               "mountpoints": [
+                  null
+               ]
+            }
+         ]
+      }
+   ]
+}

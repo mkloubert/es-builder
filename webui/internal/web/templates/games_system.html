@@ -1,0 +1,73 @@
+{{- /*
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/ -}}
+{{define "content"}}{{with .Data}}
+<p class="-mt-4 mb-6"><a href="/games" class="text-sm text-zinc-400 hover:text-zinc-100">← All systems</a></p>
+{{template "changes_banner" .Changes}}
+{{if .Notice}}{{template "flash" .Notice}}<div class="mb-4"></div>{{end}}
+{{if .GLError}}<div role="alert" class="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{{gamelistBroken .GLPath}} Names are taken from the file names. Changes can only be applied after the file is repaired.</div>{{end}}
+<div class="mb-4 flex flex-wrap items-center gap-3">
+  <input id="q" type="search" name="q" value="{{.Q}}" placeholder="Search …" autocomplete="off" aria-label="Search games"
+    hx-get="/games/{{.System.Name}}" hx-trigger="input changed delay:300ms, search" hx-target="#games-list" hx-swap="outerHTML"
+    class="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm placeholder:text-zinc-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+  <form method="post" action="/games/{{.System.Name}}/scrape" hx-post="/games/{{.System.Name}}/scrape" hx-swap="none" hx-confirm="Scrape all games of this system? This can take a long time.">
+    <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Scrape all</button>
+  </form>
+</div>
+{{template "games_list" .}}
+{{end}}{{end}}
+
+{{define "games_list"}}<div id="games-list" hx-get="/games/{{.System.Name}}" hx-include="#q" hx-trigger="changes-updated from:body" hx-swap="outerHTML">
+{{if .Rows}}
+  <p class="mb-2 text-xs text-zinc-500">{{.Total}} {{if eq .Total 1}}entry{{else}}entries{{end}}{{if .Capped}} – only the first 500 are shown, please use the search{{end}}</p>
+  <ul class="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+    {{range .Rows}}
+    <li class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 {{if .Deleted}}opacity-50{{end}}" x-data="{ edit: false }">
+      <div class="min-w-0 flex-1 basis-56">
+        <div x-show="!edit">
+          <p class="truncate text-sm font-medium {{if .Deleted}}line-through{{end}}" title="{{.Display}}">{{.Display}}
+            {{if .Renamed}}<span class="ml-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">renamed</span>{{end}}
+            {{if .Deleted}}<span class="ml-1 rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-300">will be deleted</span>{{end}}</p>
+          <p class="truncate text-xs text-zinc-500" title="{{.Rel}}">{{.Rel}}</p>
+        </div>
+        {{if not .Deleted}}
+        <form x-show="edit" style="display:none" method="post" action="/games/{{$.System.Name}}/rename" hx-post="/games/{{$.System.Name}}/rename" hx-swap="none" @htmx:after-request="edit = false" class="flex gap-2">
+          <input type="hidden" name="rel" value="{{.Rel}}">
+          <input name="name" value="{{.Display}}" required maxlength="200" aria-label="New name" class="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+          <button class="rounded-lg bg-red-500 px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Save</button>
+          <button type="button" @click="edit = false" class="rounded-lg px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">Cancel</button>
+        </form>
+        {{end}}
+      </div>
+      {{if not .Deleted}}
+      <div class="flex flex-wrap gap-2" x-show="!edit">
+        <form method="post" action="/games/{{$.System.Name}}/launch" hx-post="/games/{{$.System.Name}}/launch" hx-swap="none"><input type="hidden" name="rel" value="{{.Rel}}">
+          <button class="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-100 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Start</button></form>
+        <button type="button" @click="edit = true; $nextTick(() => $root.querySelector('input[name=name]').focus())" class="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-100 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Rename</button>
+        <form method="post" action="/games/{{$.System.Name}}/scrape" hx-post="/games/{{$.System.Name}}/scrape" hx-swap="none"><input type="hidden" name="rel" value="{{.Rel}}">
+          <button class="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-100 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Scrape</button></form>
+        <form method="post" action="/games/{{$.System.Name}}/delete" hx-post="/games/{{$.System.Name}}/delete" hx-swap="none" hx-confirm="Queue “{{.Display}}” for deletion? It is only deleted when you click “Apply”."><input type="hidden" name="rel" value="{{.Rel}}">
+          <button class="rounded-lg bg-red-500/15 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Delete</button></form>
+      </div>
+      {{end}}
+    </li>
+    {{end}}
+  </ul>
+{{else}}
+  <div class="rounded-xl border border-dashed border-zinc-700 p-8 text-center text-sm text-zinc-400">{{if .Q}}No results for “{{.Q}}”.{{else}}This system has no games yet.{{end}}</div>
+{{end}}
+</div>{{end}}

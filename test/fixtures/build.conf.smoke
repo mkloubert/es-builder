@@ -1,0 +1,17 @@
+# EmuStation Builder
+# Copyright (C) 2026  Marcel Joachim Kloubert
+#
+# Build configuration for the VM smoke test (test/vm-smoke.sh).
+#   ./build.sh vm-amd64 --config test/fixtures/build.conf.smoke
+#   test/vm-smoke.sh out/emulationstation-vm-amd64-<date>.qcow2
+# The smoke test logs in with the password below (no SSH key is needed).
+# Do not use this configuration for an image that you want to keep.
+# The password must not contain a quote character.
+HOSTNAME=emulationstation
+USER_PASSWORD=smoke-test-password
+USER_SSH_PUBKEY=
+WEB_USER=zocken
+WEB_PASSWORD=zocken
+# The host name in emulationstation.txt (test/fixtures/emulationstation.txt) must be in the
+# certificate. Otherwise the HTTPS check fails.
+TLS_EXTRA_SANS=emulationstation-smoke

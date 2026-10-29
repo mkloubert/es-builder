@@ -1,0 +1,55 @@
+{{- /*
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/ -}}
+{{define "content"}}{{with .Data}}
+<div x-data="{ tab: 'logs' }">
+  <div class="mb-5 flex gap-1 overflow-x-auto border-b border-zinc-800" role="tablist">
+    <button type="button" role="tab" @click="tab = 'logs'" :aria-selected="tab === 'logs'" :class="tab === 'logs' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Logs</button>
+    <button type="button" role="tab" @click="tab = 'bans'" :aria-selected="tab === 'bans'" :class="tab === 'bans' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Bans</button>
+    <button type="button" role="tab" @click="tab = 'updates'" :aria-selected="tab === 'updates'" :class="tab === 'updates' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Updates</button>
+    <button type="button" role="tab" @click="tab = 'power'" :aria-selected="tab === 'power'" :class="tab === 'power' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Power</button>
+  </div>
+
+  <section x-show="tab === 'logs'" role="tabpanel" aria-label="Logs">
+    <form hx-get="/system/log" hx-target="#syslog" hx-trigger="change, load" hx-swap="innerHTML" class="mb-3">
+      <label class="block max-w-xs text-sm text-zinc-300">Source
+        <select name="unit" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm placeholder:text-zinc-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+          {{range .Units}}<option value="{{.Key}}">{{.Label}}</option>{{end}}
+        </select>
+      </label>
+    </form>
+    <div id="syslog"><p class="text-sm text-zinc-500">Loading …</p></div>
+  </section>
+
+  <section x-show="tab === 'bans'" role="tabpanel" aria-label="Bans" style="display:none">
+    {{template "bans" .Bans}}
+  </section>
+
+  <section x-show="tab === 'updates'" role="tabpanel" aria-label="Updates" style="display:none" class="space-y-4">
+    <p class="text-sm text-zinc-400">The output is shown live in the job view.</p>
+    <div class="flex flex-wrap gap-3">
+      <form method="post" action="/system/update" hx-post="/system/update" hx-swap="none"><button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Update package lists</button></form>
+      <form method="post" action="/system/upgrade" hx-post="/system/upgrade" hx-swap="none" hx-confirm="All installed packages will be upgraded. This can take a long time."><button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Upgrade packages</button></form>
+    </div>
+  </section>
+
+  <section x-show="tab === 'power'" role="tabpanel" aria-label="Power" style="display:none" class="flex flex-wrap gap-3">
+    <form method="post" action="/system/reboot" hx-post="/system/reboot" hx-swap="none" hx-confirm="The system will restart. A running game will be stopped."><button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Restart</button></form>
+    <form method="post" action="/system/poweroff" hx-post="/system/poweroff" hx-swap="none" hx-confirm="The system will shut down and must be switched on again by hand."><button class="rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Shut down</button></form>
+  </section>
+</div>
+{{end}}{{end}}

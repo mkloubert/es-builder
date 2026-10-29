@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+# EmuStation Builder
+# Copyright (C) 2026  Marcel Joachim Kloubert
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# EmulationStation session wrapper. It runs on tty1 (started from RetroPie's autostart.sh)
+# and keeps EmulationStation (ES) or one game running. The web service controls it with
+# files in $RUN_DIR (the file contract):
+#   state     one line: "es", "game<TAB><system><TAB><rom>" or "stopped" (written by this script)
+#   hold      exists: do not (re)start ES; state is "stopped"
+#   launch    "<system><TAB><rom>": start this game (this script deletes the file)
+#   es.pid    PID of ES while it runs
+#   game.pid  process group ID of the game while it runs
+# ES itself leaves flag files in $TMP_DIR (es-restart, es-sysrestart, es-shutdown). This
+# script handles them, so ES_BIN must be the real ES binary, not RetroPie's /usr/bin wrapper.
+#
+# The game runs as its own process group (bash job control), but in the same session as
+# tty1. That keeps the controlling terminal: runcommand.sh reads from /dev/tty. A new
+# session (setsid) would lose it. The group ID equals the PID of the game process.
+#
+# Settings (environment, mainly for tests): ES_BIN, RUNCOMMAND, RUN_DIR, TMP_DIR, SUDO
+# (command prefix, word-split), MAX_ITER (stop after this many loop rounds, 0 = never),
+# POLL_SLEEP (seconds to wait while stopped, default 1), EXIT_HUP_TARGET (PID that gets SIGHUP
+# when this script ends abnormally, default: the parent, which is the login shell on tty1).
+#
+# Signals: Ctrl+C, Ctrl+\ and Ctrl+Z on tty1 reach this script while it is in the foreground
+# group of the tty. They are caught (not ignored), so the script keeps running; a caught signal
+# is reset to its default in child processes, so games keep their normal Ctrl+C. If the script
+# still ends (fatal error, SIGTERM, SIGHUP), it stops ES and sends SIGHUP to the login shell. The
+# session ends and getty starts a fresh autologin, which starts this script again. (A re-exec
+# on error could spin in a tight loop; a new login is slower and safe.)
+# Log lines go to the journal with "logger -t es-session"; without logger to $RUN_DIR/es-session.log.
+set -euo pipefail
+
+ES_BIN=${ES_BIN:-/opt/retropie/supplementary/emulationstation/emulationstation}
+RUNCOMMAND=${RUNCOMMAND:-/opt/retropie/supplementary/runcommand/runcommand.sh}
+RUN_DIR=${RUN_DIR:-/run/emulationstation}
+TMP_DIR=${TMP_DIR:-/tmp}
+SUDO=${SUDO:-sudo -n}
+MAX_ITER=${MAX_ITER:-0}
+POLL_SLEEP=${POLL_SLEEP:-1}
+EXIT_HUP_TARGET=${EXIT_HUP_TARGET:-$PPID}
+es_pid=""
+clean_exit=0
+
+trap ':' INT QUIT TSTP
+
+# on_exit : EXIT trap. Stop ES and end the login session, unless the end was planned.
+on_exit() {
+  if [ "$clean_exit" -eq 1 ]; then return 0; fi
+  if [ -n "$es_pid" ]; then kill -TERM "$es_pid" 2>/dev/null || true; fi
+  log "ending abnormally; sending SIGHUP to $EXIT_HUP_TARGET"
+  kill -HUP "$EXIT_HUP_TARGET" 2>/dev/null || true
+}
+trap on_exit EXIT
+trap 'exit 143' TERM HUP
+
+log() {
+  if command -v logger >/dev/null 2>&1; then
+    logger -t es-session -- "$*" || true
+  else
+    printf '%s\n' "$*" >>"$RUN_DIR/es-session.log" 2>/dev/null || true
+  fi
+}
+
+# write_state <field>... : one TAB-separated line, written atomically
+write_state() {
+  local tmp="$RUN_DIR/state.tmp.$$" line="" f
+  for f in "$@"; do line+="${line:+$'\t'}$f"; done
+  printf '%s\n' "$line" >"$tmp"
+  mv -f "$tmp" "$RUN_DIR/state"
+}
+
+# write_pid <name> <pid> : atomic, for es.pid and game.pid
+write_pid() {
+  printf '%s\n' "$2" >"$RUN_DIR/$1.tmp.$$"
+  mv -f "$RUN_DIR/$1.tmp.$$" "$RUN_DIR/$1"
+}
+
+# watch_game : background helper of run_game. Continues the game group while its leader is
+# stopped (state T). Ends when run_game kills it.
+watch_game() {
+  local pgid st
+  while sleep 0.3; do
+    pgid=$(cat "$RUN_DIR/game.pid" 2>/dev/null || true)
+    [ -n "$pgid" ] || continue
+    st=$(sed -n 's/^State:[[:space:]]*\(.\).*/\1/p' "/proc/$pgid/status" 2>/dev/null || true)
+    if [ "$st" = T ]; then
+      log "game group $pgid is stopped; continuing"
+      kill -CONT -- "-$pgid" 2>/dev/null || true
+    fi
+  done
+}
+
+# run_game <system> <rom> : starts runcommand as its own process group and waits for it
+run_game() {
+  local system=$1 rom=$2 rc=0 watcher
+  write_state game "$system" "$rom"
+  log "starting game: $system $rom"
+  # A stopped game (Ctrl+Z, for example in the runcommand menu) must not stay suspended: bash
+  # does not report a stopped job to a script, and the game keeps the terminal. The watcher
+  # continues the game while it is stopped.
+  watch_game &
+  watcher=$!
+  # The job runs in a subshell: Ctrl+C that kills the game must not end this script. The
+  # subshell has job control (set -m), so the game is a foreground job of its own process
+  # group; its exit status (130 after Ctrl+C) comes back as the status of the subshell.
+  (
+    set -m
+    trap - INT QUIT TSTP
+    # The inner bash is the group leader; it writes its PID (= group ID) and becomes runcommand.
+    # (Not the last command of the subshell, or bash runs it without a fork and without a new group.)
+    job_rc=0
+    bash -c 'printf "%s\n" "$$" >"$1.tmp" && mv -f "$1.tmp" "$1" && shift && exec "$@"' \
+      es-game "$RUN_DIR/game.pid" "$RUNCOMMAND" 0 _SYS_ "$system" "$rom" || job_rc=$?
+    exit "$job_rc"
+  ) || rc=$?
+  kill "$watcher" 2>/dev/null || true
+  wait "$watcher" 2>/dev/null || true
+  rm -f "$RUN_DIR/game.pid"
+  log "game ended (exit $rc)"
+}
+
+# handle_launch : reads and deletes the launch file, starts the game
+handle_launch() {
+  local line="" system rom
+  IFS= read -r line <"$RUN_DIR/launch" || [ -n "$line" ] || true
+  rm -f "$RUN_DIR/launch"
+  case "$line" in
+    *$'\t'*) ;;
+    *)
+      log "ignoring invalid launch file (no TAB)"
+      return 0
+      ;;
+  esac
+  system=${line%%$'\t'*}
+  rom=${line#*$'\t'}
+  case "$rom" in *$'\t'*) system="" ;; esac
+  if [ -z "$system" ] || [ -z "$rom" ]; then
+    log "ignoring invalid launch file (empty or extra field)"
+    return 0
+  fi
+  run_game "$system" "$rom"
+}
+
+# run_es : runs ES until it ends, then handles the flag files of its menu
+run_es() {
+  local pid rc=0
+  rm -f "$TMP_DIR/es-restart" "$TMP_DIR/es-sysrestart" "$TMP_DIR/es-shutdown"
+  write_state es
+  if [ -t 1 ]; then
+    clear || true
+    tput civis || true
+  fi
+  # <&0: a background job would otherwise get /dev/null as stdin
+  "$ES_BIN" <&0 &
+  pid=$!
+  es_pid=$pid
+  write_pid es.pid "$pid"
+  # a caught signal interrupts wait, so wait again while ES lives
+  while :; do
+    wait "$pid" && rc=0 || rc=$?
+    kill -0 "$pid" 2>/dev/null || break
+  done
+  es_pid=""
+  rm -f "$RUN_DIR/es.pid"
+  if [ -t 1 ]; then tput cnorm || true; fi
+  log "ES ended (exit $rc)"
+  if [ -f "$TMP_DIR/es-shutdown" ]; then
+    rm -f "$TMP_DIR/es-shutdown"
+    power poweroff
+  elif [ -f "$TMP_DIR/es-sysrestart" ]; then
+    rm -f "$TMP_DIR/es-sysrestart"
+    power reboot
+  else
+    rm -f "$TMP_DIR/es-restart"
+  fi
+}
+
+shutting_down=0
+# power <poweroff|reboot> : after success ES is not started again while the system goes down
+power() {
+  local -a cmd
+  read -r -a cmd <<<"$SUDO"
+  log "running: $SUDO $1"
+  if "${cmd[@]}" "$1"; then
+    shutting_down=1
+  else
+    log "$1 failed; going back to ES"
+  fi
+}
+
+main() {
+  local iter=0
+  mkdir -p "$RUN_DIR"
+  # Leftovers of a crashed run: the PIDs are stale (a reused PID could be signalled by the web
+  # service). hold and launch stay: they are requests from the web service. (/run is
+  # cleared at reboot anyway.)
+  rm -f "$RUN_DIR/es.pid" "$RUN_DIR/game.pid"
+  while :; do
+    if [ "$MAX_ITER" -gt 0 ] && [ "$iter" -ge "$MAX_ITER" ]; then
+      clean_exit=1
+      return 0
+    fi
+    iter=$((iter + 1))
+    if [ "$shutting_down" -eq 1 ] || [ -e "$RUN_DIR/hold" ]; then
+      write_state stopped
+      sleep "$POLL_SLEEP" || true
+    elif [ -e "$RUN_DIR/launch" ]; then
+      handle_launch
+    else
+      run_es
+    fi
+  done
+}
+
+main "$@"

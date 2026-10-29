@@ -1,0 +1,108 @@
+{{- /*
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/ -}}
+{{define "layout"}}<!doctype html>
+<html lang="en" class="bg-zinc-950">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
+<meta name="color-scheme" content="dark">
+<title>{{.Title}} · EmuStation Builder</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+<script src="/static/vendor/htmx.min.js" defer></script>
+<script src="/static/vendor/alpine.min.js" defer></script>
+</head>
+<body class="min-h-screen bg-zinc-950 font-sans text-zinc-100 antialiased selection:bg-red-500/30"
+  x-data="{ toasts: [], nextId: 1,
+    toast(msg) { const id = this.nextId++; this.toasts.push({ id, msg }); setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id) }, 6000) },
+    dialog: { open: false, message: '', proceed: null },
+    ask(d) { this.dialog = { open: true, message: d.message, proceed: d.proceed } },
+    yes() { const p = this.dialog.proceed; this.dialog.open = false; if (p) p() } }"
+  x-effect="document.body.classList.toggle('confirming', dialog.open)"
+  @toast.window="toast($event.detail.value)"
+  @ask-confirm.window="ask($event.detail)">
+
+<aside class="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-zinc-800 bg-zinc-900/60 px-4 py-6 backdrop-blur md:flex">
+  <a href="/" class="mb-8 flex items-center gap-3 rounded-lg px-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+    <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500 text-lg font-black text-zinc-950">E</span>
+    <span class="leading-tight"><span class="block text-sm font-semibold">EmuStation Builder</span><span class="block text-xs text-zinc-400">Admin</span></span>
+  </a>
+  <nav class="flex flex-col gap-1" aria-label="Main navigation">
+    {{range .Nav}}
+    <a href="{{.Href}}" {{if .Active}}aria-current="page"{{end}}
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 {{if .Active}}bg-red-500/10 text-red-400{{else}}text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100{{end}}">
+      <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{.Icon}}"/></svg>
+      {{.Label}}
+    </a>
+    {{end}}
+  </nav>
+</aside>
+
+<nav class="fixed inset-x-0 bottom-0 z-30 flex border-t border-zinc-800 bg-zinc-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main navigation">
+  {{range .Nav}}
+  <a href="{{.Href}}" {{if .Active}}aria-current="page"{{end}}
+    class="flex min-w-0 flex-1 flex-col items-center gap-1 px-0.5 py-2 text-[10px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 {{if .Active}}text-red-400{{else}}text-zinc-400{{end}}">
+    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{.Icon}}"/></svg>
+    <span class="w-full truncate text-center">{{.Label}}</span>
+  </a>
+  {{end}}
+</nav>
+
+<div class="md:pl-60">
+  {{if .CertWarning}}
+  <div role="alert" class="border-b border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 md:px-8">
+    {{if lt .CertDaysLeft 0}}The TLS certificate has expired.{{else}}The TLS certificate expires in {{.CertDaysLeft}} {{if eq .CertDaysLeft 1}}day{{else}}days{{end}}.{{end}}
+    Please renew it, or browsers will warn about the connection.
+  </div>
+  {{end}}
+  <main class="mx-auto max-w-5xl px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-10">
+    <h1 class="mb-6 text-2xl font-semibold tracking-tight">{{.Title}}</h1>
+    {{template "content" .}}
+  </main>
+  <footer class="mx-auto max-w-5xl px-4 pb-24 text-xs text-zinc-500 md:px-8 md:pb-8">
+    EmuStation Builder · <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener" class="underline hover:text-zinc-300">AGPL-3.0</a>{{if .SourceURL}} · <a href="{{.SourceURL}}" target="_blank" rel="noopener" class="underline hover:text-zinc-300">Source code</a>{{end}}
+  </footer>
+</div>
+
+<div class="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 md:bottom-6 md:items-end md:px-6" aria-live="polite">
+  <template x-for="t in toasts" :key="t.id">
+    <div class="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm shadow-xl shadow-black/40"
+      x-transition>
+      <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500"></span>
+      <span class="flex-1" x-text="t.msg"></span>
+      <button type="button" class="rounded text-zinc-400 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500" aria-label="Close" @click="toasts = toasts.filter(x => x.id !== t.id)">✕</button>
+    </div>
+  </template>
+</div>
+
+<div id="modal-slot"></div>
+
+<div x-show="dialog.open" x-cloak x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+  role="dialog" aria-modal="true" aria-labelledby="confirm-title" @keydown.escape.window="dialog.open = false" style="display:none">
+  <div class="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl" @click.outside="dialog.open = false">
+    <h2 id="confirm-title" class="text-lg font-semibold">Are you sure?</h2>
+    <p class="mt-2 text-sm text-zinc-300" x-text="dialog.message"></p>
+    <div class="mt-6 flex justify-end gap-3">
+      <button type="button" @click="dialog.open = false" class="rounded-lg px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Cancel</button>
+      <button type="button" @click="yes()" x-effect="if (dialog.open) $nextTick(() => $el.focus())" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Confirm</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>{{end}}

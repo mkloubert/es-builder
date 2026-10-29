@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<gameList>
+  <folder>
+    <path>./Hacks</path>
+    <name>Hacks</name>
+  </folder>
+  <game>
+    <path>./a.sfc</path>
+    <name>A</name>
+    <favorite>true</favorite>
+  </game>
+</gameList>

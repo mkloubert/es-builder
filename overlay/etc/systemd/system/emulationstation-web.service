@@ -1,0 +1,37 @@
+# EmuStation Builder
+# Copyright (C) 2026  Marcel Joachim Kloubert
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Web service of EmuStation Builder (HTTPS on port 11944). It runs as the user emulationstation.
+# NoNewPrivileges=no is needed: the service calls the sudo helper (/usr/local/lib/emulationstation/priv).
+# That is why there is no PrivateDevices, no RestrictSUIDSGID and no CapabilityBoundingSet here.
+[Unit]
+Description=EmuStation web service
+Wants=network-online.target
+After=network-online.target emulationstation-firstboot.service
+
+[Service]
+Type=simple
+User=emulationstation
+ExecStart=/usr/local/bin/emulationstation-web serve --config /etc/emulationstation-web/web.conf
+StateDirectory=emulationstation-web
+Restart=on-failure
+AmbientCapabilities=
+NoNewPrivileges=no
+ProtectSystem=full
+ReadWritePaths=/etc/emulationstation-web /home/emulationstation /run/emulationstation
+
+[Install]
+WantedBy=multi-user.target

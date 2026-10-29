@@ -1,0 +1,7 @@
+# Comment
+HOSTNAME=mybox
+
+USER_PASSWORD=secret
+  # indented comment
+WEB_USER="webadmin"
+WIFI_SSID='My Wi-Fi'

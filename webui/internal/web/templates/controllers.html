@@ -1,0 +1,59 @@
+{{- /*
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/ -}}
+{{define "content"}}{{with .Data}}
+{{if .Error}}<div role="alert" class="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">The controller data could not be read completely.</div>{{end}}
+<section class="mb-8">
+  <h2 class="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-400">Connected controllers</h2>
+  {{if .Devices}}
+  <ul class="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+    {{range .Devices}}
+    <li class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+      <div class="min-w-0 flex-1 basis-60">
+        <p class="truncate text-sm font-medium" title="{{.Name}}">{{.Name}}</p>
+        <p class="truncate font-mono text-xs text-zinc-500" title="{{.GUID}}">{{.Bus}} · {{.GUID}}</p>
+      </div>
+      {{if .Configured}}<span class="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-300">configured</span>
+      {{else}}<span class="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-300">not configured</span>{{end}}
+      {{if .Configured}}
+      <div class="flex flex-wrap gap-2">
+        <a href="/controllers/export?guid={{.GUID}}" class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Export</a>
+        <form method="post" action="/controllers/reset" hx-post="/controllers/reset" hx-swap="none" hx-confirm="The button mapping of this controller will be deleted. EmulationStation is paused briefly for this.">
+          <input type="hidden" name="guid" value="{{.GUID}}">
+          <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Reset</button>
+        </form>
+      </div>
+      {{end}}
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  <div class="rounded-xl border border-dashed border-zinc-700 p-8 text-center text-sm text-zinc-400">No controller found.</div>
+  {{end}}
+  <form method="post" action="/controllers/import" hx-post="/controllers/import" hx-encoding="multipart/form-data" hx-swap="none" class="mt-4 flex flex-wrap items-end gap-3">
+    <label class="block min-w-0 flex-1 basis-60 text-sm text-zinc-300">Import configuration (XML)
+      <input type="file" name="file" accept=".xml,application/xml,text/xml" required class="mt-1 block w-full text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-sm file:font-medium file:text-zinc-100 hover:file:bg-zinc-700">
+    </label>
+    <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Import</button>
+  </form>
+</section>
+
+<section aria-labelledby="bt-title">
+  <h2 id="bt-title" class="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-400">Bluetooth</h2>
+  {{template "bt_list" .BT}}
+</section>
+{{end}}{{end}}

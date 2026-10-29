@@ -1,0 +1,124 @@
+<?xml version="1.0"?>
+<!--
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<!--
+Xbox One S controller over Bluetooth (045e:02fd).
+
+Driver: xpadneo v0.10.5 (DKMS, XPADNEO_REF). core.c sets vendor 0x045E, product
+0x028E and version 0x1130 for EVERY supported controller ("pretending XB1S Windows
+wireless mode"). So SDL sees 045e:028e and not 02fd/0b13, and the One S and the
+Series controller have the same GUID (xboxseries-bt.xml has the same nodes).
+Buttons from mappings.c (BTN_A ... BTN_THUMBR like xpad), axes from events.c
+(ABS_X/ABS_Y, ABS_RX/ABS_RY, triggers ABS_Z/ABS_RZ). The name is the Bluetooth name
+of the controller (hidp: hid->name). Without xpadneo (DKMS failed, see the build
+report) hid-generic handles the pad with the real ID and other button codes. SDL then
+names 045e:02fd "Xbox One S Controller" and 045e:0b13 "Xbox Series X Controller", the
+same deviceName as in the USB templates. The GUID does not match, so ES matches by
+name, loads the USB mapping and the buttons are WRONG (no wizard appears). The web
+UI "reset" does not help (it matches the GUID or the kernel name "Xbox Wireless
+Controller", es_input.cfg has neither). Then connect a USB keyboard (ES has a
+built-in default keyboard mapping) and use the ES menu "Configure Input" for the
+pad; or fix xpadneo and rebuild. Or, via SSH, remove the inputConfig node with
+this deviceName from ~/.emulationstation/es_input.cfg and restart ES.
+
+Buttons (SDL joystick index = evdev key codes in ascending order, BTN_JOYSTICK and up first):
+  A (south) 0, B (east) 1, X (west) 2, Y (north) 3, LB 4, RB 5, Back 6, Start 7,
+  Guide 8, left stick 9, right stick 10.
+Axes: left stick 0/1, LT 2, right stick 3/4, RT 5. D-pad: hat 0.
+xpadneo puts Share on a separate keyboard device; ABS_PROFILE is axis 6 (not used).
+
+deviceName is the SDL joystick name, as EmulationStation writes it. ES looks for
+the GUID first and then for deviceName (InputManager::loadInputConfig), so the
+name is the fallback when the version in the GUID differs (spec section 9).
+The CRC in the GUID is computed from the kernel name (see guid-source).
+SDL names 045e:028e "Xbox 360 Controller" (controller_list.h), like the USB pad.
+SDL_GameControllerDB has 050000005e0400008e02000030110000 for an xpadneo pad.
+
+GUID with CRC (SDL 2.26 and newer, also sdl2-compat on SDL3 in trixie) and without CRC
+(older SDL), computed with "emulationstation-web guid" from these values:
+guid-source: bus=0x05 vendor=0x045e product=0x028e version=0x1130 name="Xbox Wireless Controller"
+
+UNVERIFIED - check on hardware: without xpadneo the pad gets the USB mapping by
+  name (wrong buttons, no wizard), see above.
+UNVERIFIED - check on hardware: Bluetooth name "Xbox Wireless Controller" (sent by the controller).
+UNVERIFIED - check on hardware: ES writes the SDL name "Xbox 360 Controller" (not the kernel name) as deviceName
+  on trixie (SDL 3.2 with sdl2-compat).
+
+Sources:
+  https://github.com/atar-axis/xpadneo/tree/v0.10.5/hid-xpadneo/src/xpadneo (core.c, mappings.c, events.c)
+  https://github.com/raspberrypi/linux/blob/rpi-6.18.y/net/bluetooth/hidp/core.c
+  https://github.com/libsdl-org/SDL/tree/release-3.2.10/src/joystick (linux/SDL_sysjoystick.c, SDL_joystick.c, controller_list.h, SDL_gamepad_db.h)
+  https://github.com/mdqinc/SDL_GameControllerDB (gamecontrollerdb.txt, Linux GUIDs seen in the wild)
+  https://github.com/RetroPie/EmulationStation/blob/stable/es-core/src/InputManager.cpp
+-->
+<inputList>
+  <inputConfig type="joystick" deviceName="Xbox 360 Controller" vendorId="1118" productId="654" deviceGUID="050018dc5e0400008e02000030110000">
+    <input name="a" type="button" id="1" value="1"/>
+    <input name="b" type="button" id="0" value="1"/>
+    <input name="down" type="hat" id="0" value="4"/>
+    <input name="hotkeyenable" type="button" id="6" value="1"/>
+    <input name="left" type="hat" id="0" value="8"/>
+    <input name="leftanalogdown" type="axis" id="1" value="1"/>
+    <input name="leftanalogleft" type="axis" id="0" value="-1"/>
+    <input name="leftanalogright" type="axis" id="0" value="1"/>
+    <input name="leftanalogup" type="axis" id="1" value="-1"/>
+    <input name="leftshoulder" type="button" id="4" value="1"/>
+    <input name="leftthumb" type="button" id="9" value="1"/>
+    <input name="lefttrigger" type="axis" id="2" value="1"/>
+    <input name="right" type="hat" id="0" value="2"/>
+    <input name="rightanalogdown" type="axis" id="4" value="1"/>
+    <input name="rightanalogleft" type="axis" id="3" value="-1"/>
+    <input name="rightanalogright" type="axis" id="3" value="1"/>
+    <input name="rightanalogup" type="axis" id="4" value="-1"/>
+    <input name="rightshoulder" type="button" id="5" value="1"/>
+    <input name="rightthumb" type="button" id="10" value="1"/>
+    <input name="righttrigger" type="axis" id="5" value="1"/>
+    <input name="select" type="button" id="6" value="1"/>
+    <input name="start" type="button" id="7" value="1"/>
+    <input name="up" type="hat" id="0" value="1"/>
+    <input name="x" type="button" id="3" value="1"/>
+    <input name="y" type="button" id="2" value="1"/>
+  </inputConfig>
+  <inputConfig type="joystick" deviceName="Xbox 360 Controller" vendorId="1118" productId="654" deviceGUID="050000005e0400008e02000030110000">
+    <input name="a" type="button" id="1" value="1"/>
+    <input name="b" type="button" id="0" value="1"/>
+    <input name="down" type="hat" id="0" value="4"/>
+    <input name="hotkeyenable" type="button" id="6" value="1"/>
+    <input name="left" type="hat" id="0" value="8"/>
+    <input name="leftanalogdown" type="axis" id="1" value="1"/>
+    <input name="leftanalogleft" type="axis" id="0" value="-1"/>
+    <input name="leftanalogright" type="axis" id="0" value="1"/>
+    <input name="leftanalogup" type="axis" id="1" value="-1"/>
+    <input name="leftshoulder" type="button" id="4" value="1"/>
+    <input name="leftthumb" type="button" id="9" value="1"/>
+    <input name="lefttrigger" type="axis" id="2" value="1"/>
+    <input name="right" type="hat" id="0" value="2"/>
+    <input name="rightanalogdown" type="axis" id="4" value="1"/>
+    <input name="rightanalogleft" type="axis" id="3" value="-1"/>
+    <input name="rightanalogright" type="axis" id="3" value="1"/>
+    <input name="rightanalogup" type="axis" id="4" value="-1"/>
+    <input name="rightshoulder" type="button" id="5" value="1"/>
+    <input name="rightthumb" type="button" id="10" value="1"/>
+    <input name="righttrigger" type="axis" id="5" value="1"/>
+    <input name="select" type="button" id="6" value="1"/>
+    <input name="start" type="button" id="7" value="1"/>
+    <input name="up" type="hat" id="0" value="1"/>
+    <input name="x" type="button" id="3" value="1"/>
+    <input name="y" type="button" id="2" value="1"/>
+  </inputConfig>
+</inputList>

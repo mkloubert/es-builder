@@ -1,0 +1,107 @@
+<?xml version="1.0"?>
+<!--
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<!--
+Xbox Series S|X controller over USB.
+
+Driver: xpad (kernel). Name from the xpad device table, version = bcdDevice of the
+USB device (usb_to_input_id).
+
+Buttons (SDL joystick index = evdev key codes in ascending order, BTN_JOYSTICK and up first):
+  A (south) 0, B (east) 1, X (west) 2, Y (north) 3, LB 4, RB 5, Back 6, Start 7,
+  Guide 8, left stick 9, right stick 10.
+Axes: left stick 0/1, LT 2, right stick 3/4, RT 5. D-pad: hat 0.
+Share is KEY_RECORD (below BTN_JOYSTICK), so it is button 11 (not used here).
+
+deviceName is the SDL joystick name, as EmulationStation writes it. ES looks for
+the GUID first and then for deviceName (InputManager::loadInputConfig), so the
+name is the fallback when the version in the GUID differs (spec section 9).
+The CRC in the GUID is computed from the kernel name (see guid-source).
+SDL names 045e:0b12 "Xbox Series X Controller" (controller_list.h).
+
+GUID with CRC (SDL 2.26 and newer, also sdl2-compat on SDL3 in trixie) and without CRC
+(older SDL), computed with "emulationstation-web guid" from these values:
+guid-source: bus=0x03 vendor=0x045e product=0x0b12 version=0x0517 name="Microsoft Xbox Series S|X Controller"
+
+UNVERIFIED - check on hardware: The version is the controller firmware (seen: 0x0501 to 0x0517).
+  0x0517 is the newest value seen. Other firmware: only the name match works.
+UNVERIFIED - check on hardware: ES writes the SDL name "Xbox Series X Controller" (not the kernel name) as deviceName
+  on trixie (SDL 3.2 with sdl2-compat).
+
+Sources:
+  https://github.com/raspberrypi/linux/blob/rpi-6.18.y/drivers/input/joystick/xpad.c
+  https://github.com/libsdl-org/SDL/tree/release-3.2.10/src/joystick (linux/SDL_sysjoystick.c, SDL_joystick.c, controller_list.h, SDL_gamepad_db.h)
+  https://github.com/mdqinc/SDL_GameControllerDB (gamecontrollerdb.txt, Linux GUIDs seen in the wild)
+  https://github.com/RetroPie/EmulationStation/blob/stable/es-core/src/InputManager.cpp
+-->
+<inputList>
+  <inputConfig type="joystick" deviceName="Xbox Series X Controller" vendorId="1118" productId="2834" deviceGUID="0300f5a35e040000120b000017050000">
+    <input name="a" type="button" id="1" value="1"/>
+    <input name="b" type="button" id="0" value="1"/>
+    <input name="down" type="hat" id="0" value="4"/>
+    <input name="hotkeyenable" type="button" id="6" value="1"/>
+    <input name="left" type="hat" id="0" value="8"/>
+    <input name="leftanalogdown" type="axis" id="1" value="1"/>
+    <input name="leftanalogleft" type="axis" id="0" value="-1"/>
+    <input name="leftanalogright" type="axis" id="0" value="1"/>
+    <input name="leftanalogup" type="axis" id="1" value="-1"/>
+    <input name="leftshoulder" type="button" id="4" value="1"/>
+    <input name="leftthumb" type="button" id="9" value="1"/>
+    <input name="lefttrigger" type="axis" id="2" value="1"/>
+    <input name="right" type="hat" id="0" value="2"/>
+    <input name="rightanalogdown" type="axis" id="4" value="1"/>
+    <input name="rightanalogleft" type="axis" id="3" value="-1"/>
+    <input name="rightanalogright" type="axis" id="3" value="1"/>
+    <input name="rightanalogup" type="axis" id="4" value="-1"/>
+    <input name="rightshoulder" type="button" id="5" value="1"/>
+    <input name="rightthumb" type="button" id="10" value="1"/>
+    <input name="righttrigger" type="axis" id="5" value="1"/>
+    <input name="select" type="button" id="6" value="1"/>
+    <input name="start" type="button" id="7" value="1"/>
+    <input name="up" type="hat" id="0" value="1"/>
+    <input name="x" type="button" id="3" value="1"/>
+    <input name="y" type="button" id="2" value="1"/>
+  </inputConfig>
+  <inputConfig type="joystick" deviceName="Xbox Series X Controller" vendorId="1118" productId="2834" deviceGUID="030000005e040000120b000017050000">
+    <input name="a" type="button" id="1" value="1"/>
+    <input name="b" type="button" id="0" value="1"/>
+    <input name="down" type="hat" id="0" value="4"/>
+    <input name="hotkeyenable" type="button" id="6" value="1"/>
+    <input name="left" type="hat" id="0" value="8"/>
+    <input name="leftanalogdown" type="axis" id="1" value="1"/>
+    <input name="leftanalogleft" type="axis" id="0" value="-1"/>
+    <input name="leftanalogright" type="axis" id="0" value="1"/>
+    <input name="leftanalogup" type="axis" id="1" value="-1"/>
+    <input name="leftshoulder" type="button" id="4" value="1"/>
+    <input name="leftthumb" type="button" id="9" value="1"/>
+    <input name="lefttrigger" type="axis" id="2" value="1"/>
+    <input name="right" type="hat" id="0" value="2"/>
+    <input name="rightanalogdown" type="axis" id="4" value="1"/>
+    <input name="rightanalogleft" type="axis" id="3" value="-1"/>
+    <input name="rightanalogright" type="axis" id="3" value="1"/>
+    <input name="rightanalogup" type="axis" id="4" value="-1"/>
+    <input name="rightshoulder" type="button" id="5" value="1"/>
+    <input name="rightthumb" type="button" id="10" value="1"/>
+    <input name="righttrigger" type="axis" id="5" value="1"/>
+    <input name="select" type="button" id="6" value="1"/>
+    <input name="start" type="button" id="7" value="1"/>
+    <input name="up" type="hat" id="0" value="1"/>
+    <input name="x" type="button" id="3" value="1"/>
+    <input name="y" type="button" id="2" value="1"/>
+  </inputConfig>
+</inputList>

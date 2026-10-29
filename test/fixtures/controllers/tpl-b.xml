@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<inputList>
+  <inputConfig type="joystick" deviceName="Pad B" deviceGUID="03000000bbbb00000200000001000000">
+    <input name="b" type="button" id="0" value="1"/>
+  </inputConfig>
+</inputList>

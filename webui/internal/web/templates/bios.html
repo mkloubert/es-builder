@@ -1,0 +1,53 @@
+{{- /*
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/ -}}
+{{define "content"}}{{with .Data}}
+{{if .Notice}}{{template "flash" .Notice}}<div class="mb-4"></div>{{end}}
+<section class="mb-8 rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
+  <h2 class="text-sm font-medium uppercase tracking-wider text-zinc-400">Upload BIOS files</h2>
+  <form method="post" action="/bios" hx-post="/bios" hx-encoding="multipart/form-data" hx-swap="none" class="mt-4 flex flex-wrap items-end gap-4">
+    <label class="block min-w-0 flex-1 basis-60 text-sm text-zinc-300">Target
+      <select name="target" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm placeholder:text-zinc-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+        <option value="">BIOS folder (default)</option>
+        <option value="dc">Dreamcast (subfolder dc/)</option>
+      </select>
+    </label>
+    <label class="block min-w-0 flex-1 basis-60 text-sm text-zinc-300">Files
+      <input type="file" name="file" multiple required class="mt-1 block w-full text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-sm file:font-medium file:text-zinc-100 hover:file:bg-zinc-700">
+    </label>
+    <button class="rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Upload</button>
+  </form>
+  <p class="mt-3 text-xs text-zinc-500">Up to 64 MiB per file. dc_boot.bin and dc_flash.bin go to the dc/ folder automatically. Existing files are replaced.</p>
+</section>
+<div class="space-y-5">
+  {{range .Groups}}
+  <section class="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+    <h2 class="border-b border-zinc-800 px-4 py-3 text-sm font-semibold">{{.Name}}</h2>
+    <ul class="divide-y divide-zinc-800">
+      {{range .Rows}}
+      <li class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3">
+        <span class="min-w-0 truncate font-mono text-sm" title="{{.File}}">{{.File}}{{if .Optional}} <span class="ml-1 font-sans text-xs text-zinc-500">optional</span>{{end}}</span>
+        {{if eq .State "ok"}}<span class="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-300">OK</span>
+        {{else if eq .State "mismatch"}}<span class="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-300">wrong checksum</span>
+        {{else}}<span class="rounded-full {{if .Optional}}bg-zinc-800 text-zinc-400{{else}}bg-red-500/15 text-red-300{{end}} px-2.5 py-0.5 text-xs font-medium">missing</span>{{end}}
+      </li>
+      {{end}}
+    </ul>
+  </section>
+  {{end}}
+</div>
+{{end}}{{end}}

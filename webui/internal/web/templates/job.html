@@ -1,0 +1,41 @@
+{{- /*
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/ -}}
+{{define "content"}}{{with .Data}}
+<div x-data="jobView($el.dataset)" data-id="{{.Job.ID}}" data-status="{{.Job.Status}}" data-progress="{{.Job.Progress}}" data-err="{{.Job.Err}}" data-log="{{.LogText}}" data-link="{{.Job.Link}}" class="space-y-5">
+  <section class="rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:p-6" aria-live="polite">
+    <div class="flex items-center justify-between gap-3">
+      <p class="text-sm font-medium" x-text="statusText"></p>
+      <p class="text-sm tabular-nums text-zinc-400" x-text="Math.round(progress * 100) + ' %'"></p>
+    </div>
+    <div class="mt-3 h-2.5 overflow-hidden rounded-full bg-zinc-800" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(progress * 100)">
+      <div class="h-full rounded-full transition-all duration-300" :class="status === 'failed' || status === 'aborted' ? 'bg-red-500' : 'bg-emerald-400'" :style="`width:${progress * 100}%`"></div>
+    </div>
+    <p class="mt-3 text-sm text-red-400" x-show="err" style="display:none" x-text="err"></p>
+  </section>
+  <section>
+    <h2 class="mb-2 text-sm font-medium uppercase tracking-wider text-zinc-400">Log</h2>
+    <pre x-ref="log" class="max-h-96 overflow-auto whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-300" x-text="log.length ? log.join('\n') : 'No output yet.'"></pre>
+  </section>
+  <div x-show="link" {{if not .Job.Link}}style="display:none"{{end}} class="flex gap-3">
+    <a href="{{.Job.Link}}" :href="link" class="rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Review files</a>
+  </div>
+  <div x-show="finished" style="display:none" class="flex gap-3">
+    <a href="/games" class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Go to games</a>
+  </div>
+</div>
+{{end}}{{end}}

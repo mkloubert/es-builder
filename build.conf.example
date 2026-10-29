@@ -1,0 +1,72 @@
+# EmuStation Builder
+# Copyright (C) 2026  Marcel Joachim Kloubert
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# EmuStation Builder: configuration template. Copy to build.conf and edit.
+# Format: KEY=VALUE, one entry per line. Values are taken literally
+# (never executed). Comments only on their own lines, not after values.
+
+# --- System ---------------------------------------------------------------
+HOSTNAME=emulationstation
+LOCALE=de_DE.UTF-8
+TIMEZONE=Europe/Berlin
+KEYMAP=de
+
+# Required for image targets: password of the user emulationstation
+USER_PASSWORD=
+# optional: public SSH key
+USER_SSH_PUBKEY=
+
+# --- Web UI (https://<device>:11944) -------------------------------
+WEB_USER=zocken
+WEB_PASSWORD=zocken
+# optional: extra names/IPs in the certificate, e.g. emulationstation.fritz.box,192.168.178.50
+TLS_EXTRA_SANS=
+
+# Source code link in the footer of the web UI (AGPL-3.0 section 13). http(s) only;
+# empty = no link. Default: upstream repository (for a fork, enter your own URL).
+SOURCE_URL=https://github.com/mkloubert/es-builder
+
+# --- Wi-Fi (optional; empty = LAN/DHCP only) -----------------------------------
+# WIFI_COUNTRY: two capital letters. On the Raspberry Pi it is needed for Wi-Fi
+# (Raspberry Pi OS blocks Wi-Fi until a country is set).
+WIFI_SSID=
+WIFI_PASSWORD=
+WIFI_COUNTRY=DE
+
+# --- Scraper (optional) -----------------------------------------------------
+SCREENSCRAPER_USER=
+SCREENSCRAPER_PASSWORD=
+
+# --- Upstream pins (state of research: 2026-10-28) -------------------------
+# Checksums: sha256:<hex> or sha512:<hex>
+
+# Raspberry Pi OS Lite arm64 (trixie), Release 2026-10-06
+RPI_IMAGE_URL=https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-10-06/2026-10-06-raspios-trixie-arm64-lite.img.xz
+RPI_IMAGE_CHECKSUM=sha256:483db18a48da399b5b7022ffae9a07bc6d99daab30e593aedac09b69ff422843
+
+# Debian 13 (trixie) nocloud, UEFI, format .raw, dated directory 20261026-2643
+# (Debian publishes only SHA512SUMS)
+VM_IMAGE_URL_AMD64=https://cloud.debian.org/images/cloud/trixie/20261026-2643/debian-13-nocloud-amd64-20261026-2643.raw
+VM_IMAGE_CHECKSUM_AMD64=sha512:f76064d3964089e7a1645b69de587bf526591dd3e68f1effc95c93c79c0239a700823ae38ed3d57e3af4ac9c36a09a9a7b11e9197e872d5845b132977d8ca481
+VM_IMAGE_URL_ARM64=https://cloud.debian.org/images/cloud/trixie/20261026-2643/debian-13-nocloud-arm64-20261026-2643.raw
+VM_IMAGE_CHECKSUM_ARM64=sha512:f34fb447ceece3d6a5fff1110a9acd113748bfed16de9158f8ef1952d2c65acc98f58fedd4d765511d43933b8d7e32a7792c3a0721382b01a8bff322f1a3b591
+
+# RetroPie-Setup, master on 2026-10-23
+RETROPIE_SETUP_REF=f5ebfba638179631d4619f2b52075dec33d4bca8
+# es-theme-epicnoir (c64-dev), latest commit (2022-07-31)
+EPICNOIR_REF=105d2bb6b7986a55cb7e9dd073c6e18a3a61595b
+# xpadneo (atar-axis), latest release
+XPADNEO_REF=v0.10.5

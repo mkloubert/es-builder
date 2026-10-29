@@ -1,0 +1,68 @@
+{
+   "blockdevices": [
+      {
+         "path": "/dev/sda",
+         "pkname": null,
+         "tran": "usb",
+         "fstype": null,
+         "size": 240057409536,
+         "label": null,
+         "type": "disk",
+         "mountpoints": [
+            null
+         ],
+         "children": [
+            {
+               "path": "/dev/sda1",
+               "pkname": "sda",
+               "tran": null,
+               "fstype": "vfat",
+               "size": 268435456,
+               "label": "bootfs",
+               "type": "part",
+               "mountpoints": [
+                  "/boot/firmware"
+               ]
+            },
+            {
+               "path": "/dev/sda2",
+               "pkname": "sda",
+               "tran": null,
+               "fstype": "ext4",
+               "size": 240000000000,
+               "label": "rootfs",
+               "type": "part",
+               "mountpoints": [
+                  "/media/root-ro"
+               ]
+            }
+         ]
+      },
+      {
+         "path": "/dev/sdb",
+         "pkname": null,
+         "tran": "usb",
+         "fstype": null,
+         "size": 64023257088,
+         "label": null,
+         "type": "disk",
+         "mountpoints": [
+            null
+         ],
+         "children": [
+            {
+               "path": "/dev/sdb1",
+               "pkname": "sdb",
+               "tran": null,
+               "fstype": "exfat",
+               "size": 64000000000,
+               "label": "GAMES",
+               "type": "part",
+               "mountpoints": [
+                  null
+               ]
+            }
+         ]
+      }
+   ]
+}

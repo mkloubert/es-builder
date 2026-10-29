@@ -1,0 +1,66 @@
+# EmuStation Builder
+# Copyright (C) 2026  Marcel Joachim Kloubert
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Settings for the first boot of your EmuStation.
+#
+# How to use this file:
+#   1. Copy it to "emulationstation.txt" in the same folder (this boot partition).
+#   2. Remove the "#" at the start of the lines you want, and change the values.
+#   3. Put the card (or disk) back and boot. The file is read at EVERY boot.
+#
+# After it was used, the file is renamed to "emulationstation.txt.applied".
+# In that copy, every password is replaced by "***". Lines that could not be
+# used are listed at the end of the copy, with the reason.
+#
+# Rules:
+#   - One setting per line: KEY=VALUE. Write the value as it is. Do not use $ or escapes.
+#   - Spaces in a value are kept. A pair of quotes around the whole value ("..." or '...')
+#     is removed. Use quotes if your value starts or ends with a space.
+#   - A value must not contain control characters. Such a line is ignored.
+#   - Unknown keys are ignored.
+#   - The file on this partition can be read by anyone who holds the card. Passwords
+#     are masked in the .applied copy, but they are visible in this file until the boot.
+
+# Host name of the device. Letters a-z (lower case), digits and "-", up to 63 characters.
+# Note: the HTTPS certificate is only valid for the host names it was built with
+# (HOSTNAME and TLS_EXTRA_SANS in build.conf). If you use another name,
+# the browser shows a certificate warning. The boot log says so.
+#HOSTNAME=emulationstation
+
+# Wi-Fi. Both lines are needed (on the Raspberry Pi also WIFI_COUNTRY, see below). The password has 8 to 63 characters (or 64 hex digits).
+# "WIFI_SSID=" with an empty value removes the Wi-Fi setting made by this file.
+# If the line is not in the file, the Wi-Fi setting stays as it is.
+#WIFI_SSID=MyNetwork
+#WIFI_PASSWORD=my wifi password
+
+# Wi-Fi country, two capital letters (for example DE, US, GB). Raspberry Pi only.
+# On the Raspberry Pi this matters: Raspberry Pi OS blocks Wi-Fi until a country is set.
+# Set it together with the Wi-Fi lines above. If it is missing, the country from the
+# build (WIFI_COUNTRY in build.conf) is used.
+#WIFI_COUNTRY=DE
+
+# Time zone, as a name from the tz database.
+#TIMEZONE=Europe/Berlin
+
+# Keyboard layout, for example de, us, gb, fr.
+#KEYMAP=de
+
+# New password for the Linux user "emulationstation" (SSH and console login).
+#USER_PASSWORD=change me
+
+# New login for the web page. You can set only the user, only the password, or both.
+#WEB_USER=zocken
+#WEB_PASSWORD=change me too

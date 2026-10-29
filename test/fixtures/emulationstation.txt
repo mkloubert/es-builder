@@ -1,0 +1,11 @@
+# EmuStation Builder
+# Copyright (C) 2026  Marcel Joachim Kloubert
+#
+# Boot file for the VM smoke test (test/vm-smoke.sh). It is copied to the EFI partition
+# of a COPY of the image. The test checks that the host name is set and that the
+# password is masked in emulationstation.txt.applied.
+# HOSTNAME must be in TLS_EXTRA_SANS of test/fixtures/build.conf.smoke.
+HOSTNAME=emulationstation-smoke
+TIMEZONE=Europe/Berlin
+# Same value as USER_PASSWORD in build.conf.smoke, so the SSH login still works.
+USER_PASSWORD=smoke-test-password

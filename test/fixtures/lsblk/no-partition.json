@@ -1,0 +1,54 @@
+{
+   "blockdevices": [
+      {
+         "path": "/dev/mmcblk0",
+         "pkname": null,
+         "tran": null,
+         "fstype": null,
+         "size": 31998345216,
+         "label": null,
+         "type": "disk",
+         "mountpoints": [
+            null
+         ],
+         "children": [
+            {
+               "path": "/dev/mmcblk0p1",
+               "pkname": "mmcblk0",
+               "tran": null,
+               "fstype": "vfat",
+               "size": 268435456,
+               "label": "bootfs",
+               "type": "part",
+               "mountpoints": [
+                  "/boot/firmware"
+               ]
+            },
+            {
+               "path": "/dev/mmcblk0p2",
+               "pkname": "mmcblk0",
+               "tran": null,
+               "fstype": "ext4",
+               "size": 31000000000,
+               "label": "rootfs",
+               "type": "part",
+               "mountpoints": [
+                  "/"
+               ]
+            }
+         ]
+      },
+      {
+         "path": "/dev/sda",
+         "pkname": null,
+         "tran": "usb",
+         "fstype": "exfat",
+         "size": 32000000000,
+         "label": "BARE",
+         "type": "disk",
+         "mountpoints": [
+            null
+         ]
+      }
+   ]
+}
