@@ -101,3 +101,61 @@ default = "vice-vsid"' ]
   [ "$status" -ne 0 ]
   [[ "$output" == *"es_systems.cfg is missing"* ]]
 }
+
+# rc_section <file> : the lines of the [C64] section, space separated
+rc_section() { awk '/^\[/{ins=($0=="[C64]");next} ins' "$1" | tr '\n' ' '; }
+
+# JOY : the [C64] lines of spec 3.2c in the order the script writes new ones
+JOY="JoyDevice1=3 JoyDevice2=2 KeySetEnable=1 KeySet1North=273 KeySet1South=274 KeySet1West=276 KeySet1East=275 KeySet1Fire=32 KeySet2North=119 KeySet2South=115 KeySet2West=97 KeySet2East=100 KeySet2Fire=13 JoyMenuControl=1"
+
+@test "VICE joysticks: keysets on both ports in [C64], other lines stay (spec 3.2c)" {
+  local rc="$FAKE/opt/retropie/configs/c64/sdl-vicerc"
+  mkdir -p "$(dirname "$rc")"
+  printf '[C64]\nMouse=1\nJoyDevice2=4\nJoyDevice2=4\n[VSID]\nSoundSampleRate=22050\n' >"$rc"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"VICE joysticks: port 1 = keyset 2"* ]]
+  # JoyDevice2 is replaced in place, the rest is added at the end of [C64]
+  [ "$(rc_section "$rc")" = "Mouse=1 JoyDevice2=2 $(echo "$JOY" | sed 's/JoyDevice2=2 //') " ]
+  grep -qx 'SoundSampleRate=22050' "$rc"
+  [ "$(grep -c '^JoyDevice2=' "$rc")" -eq 1 ]
+  [ "$(stat -c %a "$rc")" = 644 ]
+  cp "$rc" "$BATS_TEST_TMPDIR/first"
+  bash "$SCRIPT"
+  cmp "$rc" "$BATS_TEST_TMPDIR/first"
+}
+
+@test "VICE joysticks: missing [C64] section or file is added" {
+  local rc="$FAKE/opt/retropie/configs/c64/sdl-vicerc"
+  mkdir -p "$(dirname "$rc")"
+  printf '[VSID]\nX=1\n' >"$rc"
+  bash "$SCRIPT"
+  [ "$(cat "$rc")" = "$(printf '[VSID]\nX=1\n[C64]\n'; echo "$JOY" | tr ' ' '\n')" ]
+  rm "$rc"
+  bash "$SCRIPT"
+  [ "$(cat "$rc")" = "$(printf '[C64]\n'; echo "$JOY" | tr ' ' '\n')" ]
+}
+
+@test "VICE joysticks: no VICE config folder -> nothing is written" {
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no joystick setup"* ]]
+  [ ! -e "$FAKE/opt/retropie/configs/c64" ]
+}
+
+@test "VICE joymap: RETURN on button 2 when missing; an own map stays (spec 3.2c)" {
+  local jm="$FAKE/opt/retropie/configs/c64/sdl-joymap-C64.vjm"
+  mkdir -p "$(dirname "$jm")"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"RETURN on pad button 2"* ]]
+  [ "$(grep -v '^#' "$jm")" = "$(printf '0 1 2 2 0 1\n1 1 2 2 0 1')" ]
+  run grep -q '^!CLEAR' "$jm"
+  [ "$status" -ne 0 ]
+  [ "$(stat -c %a "$jm")" = 644 ]
+  printf '!CLEAR\n0 1 0 1 1 16\n' >"$jm"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"joymap exists, not changed"* ]]
+  [ "$(cat "$jm")" = "$(printf '!CLEAR\n0 1 0 1 1 16')" ]
+}

@@ -116,6 +116,15 @@ c64music_ok() {
     grep -qx 'vice-vsid = "/opt/retropie/emulators/vice/bin/vice.sh vsid %ROM%"' "$emu" &&
     [ -d "$R/home/emulationstation/RetroPie/roms/c64music" ]
 }
+# vice_joy_ok : when VICE is in the image, port 1 = keyset 2, port 2 = keyset 1, keysets on, and
+# RETURN on pad button 2 (spec 2026-10-31-c64-music-vm-systems-design.md 3.2c)
+vice_joy_ok() {
+  local rc=$R/opt/retropie/configs/c64/sdl-vicerc
+  [ -d "$R/opt/retropie/configs/c64" ] || return 0
+  grep -qx 'JoyDevice1=3' "$rc" 2>/dev/null && grep -qx 'JoyDevice2=2' "$rc" &&
+    grep -qx 'KeySetEnable=1' "$rc" && grep -qx 'KeySet1Fire=32' "$rc" && grep -qx 'KeySet2Fire=13' "$rc" &&
+    grep -qx '0 1 2 2 0 1' "$R/opt/retropie/configs/c64/sdl-joymap-C64.vjm" 2>/dev/null
+}
 ui_dir_set() { grep -qx 'UI_DIR=/home/emulationstation/webui-custom' "$R/etc/emulationstation-web/web.conf" 2>/dev/null; }
 machine_id_unset() { [ "$(cat "$R/etc/machine-id" 2>/dev/null)" = uninitialized ]; }
 no_host_keys() { ! compgen -G "$R/etc/ssh/ssh_host_*" >/dev/null; }
@@ -220,6 +229,7 @@ checks_units() {
   check "web.conf: UI_DIR=/home/emulationstation/webui-custom" ui_dir_set
   check "emulationstation-cpu.service: oneshot priv cpu-apply" cpu_unit_ok
   check "c64music: .sid system with vsid (when VICE is installed)" c64music_ok
+  check "VICE: keyset joysticks on both C64 ports, RETURN on pad button 2 (when VICE is installed)" vice_joy_ok
   check "shell tools: mc is in the image" in_image mc
   check "shell tools: ifconfig (net-tools) is in the image" in_image ifconfig
   check "profile.d: sbin folders in PATH for login shells" test -s "$R/etc/profile.d/20-emulationstation-sbin.sh"

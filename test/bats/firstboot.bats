@@ -66,11 +66,20 @@ STUB
 echo vda
 STUB
   chmod +x "$STUBS/findmnt" "$STUBS/lsblk"
-  mkdir -p "$T/sys/vda2"
+  mkdir -p "$T/sys/vda2" "$T/sys/vda"
   echo 2 >"$T/sys/vda2/partition"
+  # a 16 GiB disk (512-byte sectors) that the root partition fills (34 sectors GPT backup)
+  sys_sizes 33554432 262144 33292254
   # a hostile file must not be able to run "reboot" through PATH either
   PATH="$STUBS:$PATH"
   export FAKE_ROOT="$FR"
+}
+
+# sys_sizes <disk sectors> <partition start> <partition sectors> : the fake /sys sizes
+sys_sizes() {
+  echo "$1" >"$T/sys/vda/size"
+  echo "$2" >"$T/sys/vda2/start"
+  echo "$3" >"$T/sys/vda2/size"
 }
 
 # run_fb [VAR=value ...] : runs the script with the fake root and the stubs
@@ -162,6 +171,46 @@ STUB
   [ "$status" -eq 1 ]
   [[ $output == *"growpart failed"* ]]
   [ ! -e "$FR/var/lib/emulationstation/grown" ]
+}
+
+@test "firstboot: small disk -> warning, no marker, exit 0, next boot grows again" {
+  # 3.4 GiB disk, filled by the partition (the UTM .raw case)
+  sys_sizes 7130317 262144 6868139
+  KIND=vm run_fb
+  [ "$status" -eq 0 ]
+  [[ $output == *"WARNING: the disk is only 3.4 GiB (root 3.2 GiB). Make the VM disk bigger"* ]]
+  [ ! -e "$FR/var/lib/emulationstation/grown" ]
+  # the owner makes the disk bigger: the next boot grows and writes the marker
+  : >"$CALLS"
+  sys_sizes 33554432 262144 33292254
+  KIND=vm run_fb
+  [ "$status" -eq 0 ]
+  grep -qx 'growpart /dev/vda 2' "$CALLS"
+  grep -qx 'resize2fs /dev/vda2' "$CALLS"
+  [ -f "$FR/var/lib/emulationstation/grown" ]
+}
+
+@test "firstboot: space left after the partition -> warning, no marker" {
+  sys_sizes 33554432 262144 20000000
+  KIND=vm run_fb
+  [ "$status" -eq 0 ]
+  [[ $output == *"did not grow to the end of /dev/vda"* ]]
+  [ ! -e "$FR/var/lib/emulationstation/grown" ]
+}
+
+@test "firstboot: sizes cannot be read -> warning, no marker" {
+  rm "$T/sys/vda/size"
+  KIND=vm run_fb
+  [ "$status" -eq 0 ]
+  [[ $output == *"cannot read the size"* ]]
+  [ ! -e "$FR/var/lib/emulationstation/grown" ]
+}
+
+@test "firstboot: exactly 8 GiB filled -> marker" {
+  sys_sizes 16777216 262144 16514038
+  KIND=vm run_fb
+  [ "$status" -eq 0 ]
+  [ -f "$FR/var/lib/emulationstation/grown" ]
 }
 
 @test "firstboot: rpi4 never calls growpart" {

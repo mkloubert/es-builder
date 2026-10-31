@@ -372,6 +372,14 @@ BOOT=boot/efi
 # shellcheck source=test/lib/static-app.sh
 . "$ROOT/test/lib/static-app.sh"
 
+# flycast_gl_ok : the flycast line (if any) has the OpenGL 4.3 override for virgl
+# (spec 2026-10-31-c64-music-vm-systems-design.md 3.2d)
+flycast_gl_ok() {
+  local f=$R/opt/retropie/configs/dreamcast/emulators.cfg
+  grep -q '^flycast = "' "$f" 2>/dev/null || return 0
+  grep -q '^flycast = "MESA_GL_VERSION_OVERRIDE=4.3 MESA_GLSL_VERSION_OVERRIDE=430 ' "$f"
+}
+
 checks_app() {
   checks_web "$(vm_file_arch)"
   checks_controllers
@@ -380,6 +388,7 @@ checks_app() {
   checks_firstboot
   checks_usb
   check "emulationstation-cpu.service not enabled (Pi 4 only)" not_wanted_cpu
+  check "flycast: OpenGL 4.3 override for virgl (when flycast is installed)" flycast_gl_ok
 }
 
 run_checks() {

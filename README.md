@@ -158,6 +158,21 @@ Put the card into the Pi 4, connect the network and a screen, and power on. On t
 root partition grows to fill the card, SSH host keys are made, and your boot file is read (see below).
 The first start takes a little longer.
 
+## C64 joysticks (VICE)
+
+VICE starts with two keyboard joysticks:
+
+| C64 port | Keys | Fire |
+|---|---|---|
+| Port 1 | W, S, A, D | Return |
+| Port 2 (most games) | arrow keys | Space |
+
+"Swap native joystick ports" is off at every start (VICE menu: Machine settings → Joystick
+settings, or Alt+J). While these keysets are on, the keys above move the joystick and do not
+reach the C64 keyboard. So use the C64 RETURN key on the pad: pad button 2 (in SDL order; which
+physical button this is depends on the pad). Another pad button opens the VICE menu (there you
+can also quit). Game pads do not move a C64 joystick in this setup.
+
 ## C64 music (`.sid` files)
 
 `.sid` files are C64 music, not games. Every image with the C64 emulator VICE has an extra system
@@ -182,6 +197,9 @@ not scrape this system, because ScreenScraper has no data for SID music.
   for example `truncate -s 16G emulationstation-vm-amd64-<date>.raw`, then
   `VBoxManage convertfromraw emulationstation-vm-amd64-<date>.raw vm.vdi --format VDI`. Enable EFI
   in the VM settings. (You can also resize the VDI with `VBoxManage modifymedium disk vm.vdi --resize 16384`.)
+- If the disk is smaller than 8 GiB, the first boot logs a warning
+  (`journalctl -u emulationstation-firstboot`) and the root does not grow. Make the VM disk
+  bigger (16 GiB) and reboot: the root file system then grows by itself.
 - The serial console is active. There is usually no Bluetooth adapter in a VM, and the web UI says so.
 
 ## Import the CA certificate

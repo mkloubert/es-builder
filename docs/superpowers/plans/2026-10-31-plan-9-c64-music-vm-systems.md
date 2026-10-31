@@ -23,6 +23,10 @@
 - [ ] 1b. `overlay/etc/profile.d/20-emulationstation-sbin.sh` (spec 3.2b) + tests.
 - [ ] 2. `provision/common/app-25-c64music.sh` (spec 3.2), with functions `write_emulators`,
   `add_system` and `main`; only `main` runs when the file is executed.
+- [ ] 2a. VICE joysticks in `sdl-vicerc` (spec 3.2c, keysets as the owner asked): function
+  `set_vice_joysticks` and the RETURN joymap in `app-25-c64music.sh`, tests, static check.
+- [ ] 2b. `provision/vm/app-20-flycast.sh` (spec 3.2d) + `test/bats/vm-flycast.bats` + check in
+  `test/vm-static.sh`.
 - [ ] 3. `test/bats/c64music.bats` (spec 3.4) with a fixture `test/fixtures/es_systems/`.
 - [ ] 4. `webui/internal/scrape`: `Supported`; table test.
 - [ ] 5. `webui/internal/web`: 400 in `handleScrape`, filter in the upload commit, `Scrape` flag

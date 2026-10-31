@@ -16,9 +16,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # First boot setup. Runs as root at EVERY boot, before the network, ssh and the web service.
-#  1. Makes the SSH host keys if there are none. VM only: grows the root partition once
-#     (growpart + resize2fs, marker /var/lib/emulationstation/grown). Raspberry Pi OS grows
-#     the partition by itself.
+#  1. Makes the SSH host keys if there are none. VM only: grows the root partition
+#     (growpart + resize2fs). The marker /var/lib/emulationstation/grown is written only when
+#     the root then fills a disk of at least 8 GiB; otherwise a warning, and the next boot tries
+#     again. Raspberry Pi OS grows the partition by itself.
 #     Raspberry Pi only: turns the Wi-Fi radio on once (marker /var/lib/emulationstation/wifi-on).
 #  2. If BOOT_DIR/emulationstation.txt exists, applies it and renames it to
 #     emulationstation.txt.applied.
@@ -101,6 +102,9 @@ RESIZE2FS=${RESIZE2FS:-resize2fs}
 FINDMNT=${FINDMNT:-findmnt}
 LSBLK=${LSBLK:-lsblk}
 SYS_BLOCK=${SYS_BLOCK:-/sys/class/block}
+# grow check (512-byte sectors): at most 16 MiB left after the root partition, disk at least 8 GiB
+GROW_SLACK_SECTORS=32768
+GROW_MIN_SECTORS=16777216
 OPENSSL=${OPENSSL:-openssl}
 CHOWN=${CHOWN:-chown}
 RFKILL=${RFKILL:-rfkill}
@@ -174,9 +178,37 @@ grow_root() {
     fail "grow root" "resize2fs failed"
     return 0
   fi
+  if ! root_fills_disk "$name" "$disk"; then return 0; fi
   mkdir -p "$STATE_DIR"
   : >"$STATE_DIR/grown"
 }
+
+# root_fills_disk <partition> <disk> : 0 when the partition ends at the end of the disk (less
+# than 16 MiB left) and the disk has at least 8 GiB (spec 2026-10-31-vm-grow-check-design.md).
+# Otherwise it logs a warning and returns 1, so no marker is written and the next boot tries again.
+root_fills_disk() {
+  local part=$1 disk=$2 dsize pstart psize left
+  dsize=$(cat "$SYS_BLOCK/$disk/size" 2>/dev/null) || dsize=
+  pstart=$(cat "$SYS_BLOCK/$part/start" 2>/dev/null) || pstart=
+  psize=$(cat "$SYS_BLOCK/$part/size" 2>/dev/null) || psize=
+  if ! [[ $dsize =~ ^[0-9]+$ && $pstart =~ ^[0-9]+$ && $psize =~ ^[0-9]+$ ]]; then
+    log "WARNING: cannot read the size of /dev/$disk or /dev/$part; the root grows again at the next boot"
+    return 1
+  fi
+  left=$((dsize - pstart - psize))
+  if [ "$left" -ge "$GROW_SLACK_SECTORS" ]; then
+    log "WARNING: /dev/$part did not grow to the end of /dev/$disk ($((left / 2048)) MiB left); the root grows again at the next boot"
+    return 1
+  fi
+  if [ "$dsize" -lt "$GROW_MIN_SECTORS" ]; then
+    log "WARNING: the disk is only $(gib "$dsize") GiB (root $(gib "$psize") GiB). Make the VM disk bigger (16 GiB, see README); the root file system grows at the next boot."
+    return 1
+  fi
+  return 0
+}
+
+# gib <sectors> : size in GiB with one decimal (512-byte sectors)
+gib() { printf '%d.%d' $(($1 / 2097152)) $((($1 % 2097152) * 10 / 2097152)); }
 
 # --- Step 2: parse the file -----------------------------------------------------------
 

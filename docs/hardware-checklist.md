@@ -149,6 +149,12 @@ warning.
   "Commodore 64 Music", the file lands in `~/RetroPie/roms/c64music/`, and the games page of this
   system has no "Scrape" button. Start it in ES. Expected: VICE's `vsid` plays the tune, and you can
   leave the player (F12 menu or the RetroPie hotkey) and get back to ES.
+- [ ] C64 joysticks: start a joystick game. Expected: arrow keys move and Space fires on port 2;
+  W/S/A/D move and Return fires on port 1. In the VICE menu (Machine settings → Joystick
+  settings): port 1 "Keyset 2", port 2 "Keyset 1", swap off, "Allow keyset joystick" on.
+- [ ] C64 pad buttons: write down which pad button opens the VICE menu (button 1 in SDL order) and
+  that "Quit emulator" there returns to ES. Write down which button is RETURN (button 2 in SDL
+  order): at the `READY.` prompt it moves the cursor to the next line.
 - [ ] N64 and PSP: they depend on the game. Try one game of each. A slow game is not a bug (README).
 - [ ] Start a game from the web UI. Expected: the game runs on the TV and "stop game" in the web UI
   ends it and ES returns. (The game process group and `runcommand` on a real terminal were only
@@ -225,6 +231,9 @@ once with the menu in ES and once in a game.
   boot does not call `growpart` again.
 - [ ] Raw image: enlarge the disk first (`truncate -s 16G file.raw` or
   `VBoxManage modifymedium disk file.vdi --resize 16384`), then boot. The root grows to it.
+- [ ] Raw image **without** a resize (3.4 GiB disk): `journalctl -u emulationstation-firstboot`
+  shows "WARNING: the disk is only 3.4 GiB", and `/var/lib/emulationstation/grown` is missing.
+  Make the disk 16 GiB, reboot: `df -h /` shows about 16G, and the marker is there.
 - [ ] No first boot question on the console. The serial console works.
 - [ ] GRUB: `grep root= /boot/grub/grub.cfg` shows no `/dev/loop`. The build log says whether
   `update-grub` or the fallback was used.
@@ -234,7 +243,8 @@ once with the menu in ES and once in a game.
 - [ ] The VM has the systems "Commodore 64", "Commodore 64 Music", "Dreamcast" and "PlayStation"
   (when `vice`, `flycast` and `lr-pcsx-rearmed` are not in the build report). The web UI
   accepts a `.d64`, a `.sid`, a `.cdi` and a `.cue`. `mc` and `ifconfig` work in an SSH session.
-  Starting a game is optional (software rendering, Dreamcast is slow).
+  Starting a game is optional. Dreamcast needs a UTM display with "GPU Supported" (virgl); then
+  flycast logs "Renderer 'virgl' Version '4.3 (Core Profile)'" in `/dev/shm/runcommand.log`.
 
 ## 9. Builder on the host
 
