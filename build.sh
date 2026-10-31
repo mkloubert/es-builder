@@ -101,11 +101,11 @@ CONFIG_ABS=""
 case "$TARGET" in
   rpi4 | vm-amd64 | vm-arm64 | all)
     [ -f "$CONFIG" ] || die "Configuration '$CONFIG' is missing. Please run 'cp build.conf.example build.conf' and edit it." 2
-    config_load "$CONFIG"
+    config_load "$CONFIG" || exit 2
     config_require USER_PASSWORD || exit 2
     ;;
   cert)
-    if [ -f "$CONFIG" ]; then config_load "$CONFIG"; fi
+    if [ -f "$CONFIG" ]; then config_load "$CONFIG" || exit 2; fi
     ;;
 esac
 if [ -f "$CONFIG" ]; then

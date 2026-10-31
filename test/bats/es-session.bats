@@ -242,6 +242,60 @@ os.execv(sys.argv[1], sys.argv[1:])' "$SESSION" &
   [ "$status" -ne 0 ]
 }
 
+@test "session.pid holds the wrapper PID while ES runs" {
+  ES_EXIT_ACTION='cp "$RUN_DIR/session.pid" "$RUN_DIR/../seen-session"' MAX_ITER=1 run "$SESSION"
+  [ "$status" -eq 0 ]
+  grep -qxE '[0-9]+' "$BATS_TEST_TMPDIR/seen-session"
+}
+
+@test "after the end session.pid is gone" {
+  MAX_ITER=1 run "$SESSION"
+  [ "$status" -eq 0 ]
+  [ ! -e "$RUN_DIR/session.pid" ]
+}
+
+@test "a session.pid of another wrapper is not removed" {
+  ES_EXIT_ACTION='echo 999999 >"$RUN_DIR/session.pid"' MAX_ITER=1 run "$SESSION"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$RUN_DIR/session.pid")" = 999999 ]
+}
+
+@test "abnormal end also removes session.pid" {
+  sleep 60 &
+  helper=$!
+  export EXIT_HUP_TARGET=$helper
+  ES_SLEEP=30 start_bg
+  local had=0
+  [ ! -e "$RUN_DIR/session.pid" ] || had=1
+  # stop the wrapper before any check, so a failed check leaves no process behind
+  kill -TERM "$WPID"
+  wait "$WPID" || true
+  kill "$helper" 2>/dev/null || true
+  [ "$had" -eq 1 ]
+  [ ! -e "$RUN_DIR/session.pid" ]
+}
+
+@test "a second wrapper ends at once while another session runs" {
+  sleep 60 &
+  local other=$!
+  echo "$other" >"$RUN_DIR/session.pid"
+  echo 4242 >"$RUN_DIR/es.pid"
+  MAX_ITER=1 run "$SESSION"
+  kill "$other" 2>/dev/null || true
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Another EmulationStation session runs already"* ]]
+  [ "$(es_runs)" -eq 0 ]
+  [ "$(cat "$RUN_DIR/session.pid")" = "$other" ]
+  [ "$(cat "$RUN_DIR/es.pid")" = 4242 ]
+}
+
+@test "a stale session.pid (dead PID) does not block a new wrapper" {
+  echo 999999 >"$RUN_DIR/session.pid"
+  MAX_ITER=1 run "$SESSION"
+  [ "$status" -eq 0 ]
+  [ "$(es_runs)" -eq 1 ]
+}
+
 @test "normal end (MAX_ITER) does not send HUP" {
   sleep 60 &
   helper=$!

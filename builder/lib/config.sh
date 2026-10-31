@@ -24,7 +24,8 @@ set -euo pipefail
 CONFIG_KEYS="HOSTNAME LOCALE TIMEZONE KEYMAP USER_PASSWORD USER_SSH_PUBKEY WEB_USER WEB_PASSWORD \
 WIFI_SSID WIFI_PASSWORD WIFI_COUNTRY TLS_EXTRA_SANS SCREENSCRAPER_USER SCREENSCRAPER_PASSWORD \
 RPI_IMAGE_URL RPI_IMAGE_CHECKSUM VM_IMAGE_URL_AMD64 VM_IMAGE_CHECKSUM_AMD64 \
-VM_IMAGE_URL_ARM64 VM_IMAGE_CHECKSUM_ARM64 RETROPIE_SETUP_REF EPICNOIR_REF XPADNEO_REF SOURCE_URL"
+VM_IMAGE_URL_ARM64 VM_IMAGE_CHECKSUM_ARM64 RETROPIE_SETUP_REF EPICNOIR_REF XPADNEO_REF SOURCE_URL \
+ES_AUTOSTART"
 
 CONFIG_FILE=""
 
@@ -53,6 +54,7 @@ config_load() {
   printf -v CFG_WEB_PASSWORD '%s' zocken
   printf -v CFG_WIFI_COUNTRY '%s' DE
   printf -v CFG_SOURCE_URL '%s' https://github.com/mkloubert/es-builder
+  printf -v CFG_ES_AUTOSTART '%s' no
 
   while IFS= read -r line || [ -n "$line" ]; do
     line=${line%$'\r'}
@@ -92,6 +94,15 @@ config_load() {
     fi
     printf -v "CFG_$key" '%s' "$val"
   done <"$file"
+
+  # ES_AUTOSTART: only these two words (an empty value in the file is wrong too)
+  case "$CFG_ES_AUTOSTART" in
+    yes | no) ;;
+    *)
+      log_error "ES_AUTOSTART must be yes or no (found: $CFG_ES_AUTOSTART)"
+      return 1
+      ;;
+  esac
 }
 
 # config_require <KEY>... : fails (return 1) with a message if a value is empty.

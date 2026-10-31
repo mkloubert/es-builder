@@ -92,7 +92,8 @@ func (s *Server) esFail(w http.ResponseWriter, r *http.Request, what string, err
 	switch {
 	case errors.As(err, &ue):
 		s.fail(w, r, http.StatusUnprocessableEntity, ue.msg)
-	case errors.Is(err, es.ErrBusy), errors.Is(err, es.ErrGameRunning), errors.Is(err, es.ErrStopTimeout), errors.Is(err, es.ErrNotRunning):
+	case errors.Is(err, es.ErrBusy), errors.Is(err, es.ErrGameRunning), errors.Is(err, es.ErrStopTimeout), errors.Is(err, es.ErrNotRunning),
+		errors.Is(err, es.ErrNoSession):
 		code, msg := actionError(err)
 		s.fail(w, r, code, msg)
 	default:

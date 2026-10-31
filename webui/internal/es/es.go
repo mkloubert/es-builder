@@ -38,6 +38,7 @@ var (
 	ErrNotRunning  = errors.New("es: EmulationStation is not running")
 	ErrNoGame      = errors.New("es: no game process known")
 	ErrBusy        = errors.New("es: another operation is in progress")
+	ErrNoSession   = errors.New("es: no EmulationStation session on the device")
 )
 
 const (
@@ -48,11 +49,12 @@ const (
 	stateGame       = "game"
 	stateStopped    = "stopped"
 	stateUnknown    = "unknown"
+	stateOff        = "off" // no es-session runs (for example ES_AUTOSTART=no)
 )
 
 // State is the parsed content of the state file.
 type State struct {
-	Kind   string // "es" | "game" | "stopped" | "unknown"
+	Kind   string // "es" | "game" | "stopped" | "unknown" | "off"
 	System string
 	ROM    string
 }
@@ -74,8 +76,18 @@ func (c *Controller) stopTimeout() time.Duration {
 	return c.StopTimeout
 }
 
-// State reads the state file; missing or malformed content yields "unknown".
+// SessionRunning reports if the wrapper es-session runs: session.pid holds a live PID.
+func (c *Controller) SessionRunning() bool {
+	pid := c.readPID("session.pid")
+	return pid != 0 && alive(pid)
+}
+
+// State reads the state file; missing or malformed content yields "unknown". Without a
+// session it is "off" and the state file is not read.
 func (c *Controller) State() State {
+	if !c.SessionRunning() {
+		return State{Kind: stateOff}
+	}
 	b, err := os.ReadFile(c.path("state"))
 	if err != nil {
 		return State{Kind: stateUnknown}
@@ -131,12 +143,16 @@ func (c *Controller) esPID() int {
 	return pid
 }
 
-// Restart sends SIGTERM to ES; the wrapper starts it again (no hold).
+// Restart sends SIGTERM to ES; the wrapper starts it again (no hold). ErrNoSession without
+// a session.
 func (c *Controller) Restart() error {
 	if !c.opMu.TryLock() {
 		return ErrBusy
 	}
 	defer c.opMu.Unlock()
+	if !c.SessionRunning() {
+		return ErrNoSession
+	}
 	pid := c.esPID()
 	if pid == 0 {
 		return ErrNotRunning
@@ -152,12 +168,16 @@ func signal(pid int, sig syscall.Signal) error {
 }
 
 // Stop creates the hold file, terminates ES and waits until state is stopped.
-// Returns ErrBusy while a WithESStopped operation (or another call) runs.
+// Returns ErrBusy while a WithESStopped operation (or another call) runs. Without a session
+// it returns nil and creates no hold file.
 func (c *Controller) Stop() error {
 	if !c.opMu.TryLock() {
 		return ErrBusy
 	}
 	defer c.opMu.Unlock()
+	if !c.SessionRunning() {
+		return nil // nothing runs, so there is nothing to stop
+	}
 	if c.State().Kind == stateGame {
 		return ErrGameRunning
 	}
@@ -209,12 +229,16 @@ func (c *Controller) createHold() error {
 }
 
 // Start removes the hold file so the wrapper may (re)start ES. Idempotent.
-// Returns ErrBusy while a WithESStopped operation (or another call) runs.
+// Returns ErrBusy while a WithESStopped operation (or another call) runs, and ErrNoSession
+// when no es-session runs.
 func (c *Controller) Start() error {
 	if !c.opMu.TryLock() {
 		return ErrBusy
 	}
 	defer c.opMu.Unlock()
+	if !c.SessionRunning() {
+		return ErrNoSession
+	}
 	return c.start()
 }
 
@@ -226,7 +250,8 @@ func (c *Controller) start() error {
 }
 
 // Launch asks the wrapper to start a game: writes the launch file atomically,
-// clears hold and terminates ES so the wrapper picks the file up.
+// clears hold and terminates ES so the wrapper picks the file up. ErrNoSession without a
+// session.
 func (c *Controller) Launch(system, romAbs string) error {
 	if !c.opMu.TryLock() {
 		return ErrBusy
@@ -239,6 +264,9 @@ func (c *Controller) Launch(system, romAbs string) error {
 	}
 	if system == "" || romAbs == "" {
 		return errors.New("es: system and rom must not be empty")
+	}
+	if !c.SessionRunning() {
+		return ErrNoSession
 	}
 	if c.State().Kind == stateGame {
 		return ErrGameRunning
@@ -314,10 +342,14 @@ func (c *Controller) StopGame() error {
 // the wrapper cannot restart ES meanwhile. If hold already existed (the user
 // stopped ES), it is left in place afterwards; otherwise it is removed again
 // (also when fn fails). Calls are serialized. A running game yields
-// ErrGameRunning.
+// ErrGameRunning. Without a session ES does not run: fn runs at once, see
+// withHoldOnly.
 func (c *Controller) WithESStopped(ctx context.Context, fn func() error) error {
 	c.opMu.Lock()
 	defer c.opMu.Unlock()
+	if !c.SessionRunning() {
+		return c.withHoldOnly(fn)
+	}
 	if c.State().Kind == stateGame {
 		return ErrGameRunning
 	}
@@ -335,6 +367,23 @@ func (c *Controller) WithESStopped(ctx context.Context, fn func() error) error {
 	}
 	if startErr := c.start(); fnErr == nil {
 		return startErr
+	}
+	return fnErr
+}
+
+// withHoldOnly runs fn without a session. ES does not run, so there is nothing to stop. A
+// wrapper can still start while fn runs (boot, re-login on tty1), so a hold file is in place
+// during fn; it is removed afterwards unless it existed before (the user stopped ES).
+func (c *Controller) withHoldOnly(fn func() error) error {
+	if _, err := os.Stat(c.path("hold")); err == nil {
+		return fn()
+	}
+	if err := c.createHold(); err != nil {
+		return err
+	}
+	fnErr := fn()
+	if err := c.start(); fnErr == nil {
+		return err
 	}
 	return fnErr
 }

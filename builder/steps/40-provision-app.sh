@@ -45,7 +45,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 # Values the app scripts may need (all CFG_* keys without the upstream pins and image URLs).
 APP_ENV_KEYS="USER_PASSWORD USER_SSH_PUBKEY WEB_USER WEB_PASSWORD SCREENSCRAPER_USER \
 SCREENSCRAPER_PASSWORD HOSTNAME LOCALE TIMEZONE KEYMAP WIFI_SSID WIFI_PASSWORD WIFI_COUNTRY \
-TLS_EXTRA_SANS SOURCE_URL"
+TLS_EXTRA_SANS SOURCE_URL ES_AUTOSTART"
 
 # app_write_env <file> : KEY="VALUE" lines, mode 0600 from the start. Values are always
 # quoted: config_load removes exactly one pair of quotes, so a value that itself starts and

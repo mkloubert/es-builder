@@ -80,6 +80,14 @@ es_owned() {
   uid=$(passwd_field emulationstation 3) && gid=$(passwd_field emulationstation 4) || return 1
   [ -e "$dir/$1" ] && [ -z "$(find "$dir/$1" \( ! -uid "$uid" -o ! -gid "$gid" \) -print -quit 2>/dev/null)" ]
 }
+# autostart_ok : RetroPie's autostart.sh is the "yes" form (only the es-session exec) or the "no"
+# form (the off hint and no exec line), spec 2026-10-31-es-autostart-design.md 3.2
+autostart_ok() {
+  local f="$R/opt/retropie/configs/all/autostart.sh"
+  [ -f "$f" ] || return 1
+  [ "$(cat "$f")" = 'exec /usr/local/lib/emulationstation/es-session' ] && return 0
+  grep -q 'EmulationStation autostart is off' "$f" && ! grep -qE '^[[:space:]]*exec[[:space:]]' "$f"
+}
 machine_id_unset() { [ "$(cat "$R/etc/machine-id" 2>/dev/null)" = uninitialized ]; }
 no_host_keys() { ! compgen -G "$R/etc/ssh/ssh_host_*" >/dev/null; }
 no_ssh_socket() { [ ! -e "$R/etc/systemd/system/sockets.target.wants/ssh.socket" ]; }
@@ -178,6 +186,7 @@ checks_units() {
   check "nftables.service enabled" is_wanted multi-user.target nftables.service
   check "fail2ban.service enabled" is_wanted multi-user.target fail2ban.service
   check "emulationstation-firstboot.service enabled" is_wanted multi-user.target emulationstation-firstboot.service
+  check "autostart.sh: es-session (yes) or the off hint (no)" autostart_ok
 }
 
 checks_firstboot() {

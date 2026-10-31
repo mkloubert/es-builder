@@ -29,6 +29,11 @@ USER_PASSWORD=
 # optional: public SSH key
 USER_SSH_PUBKEY=
 
+# --- EmulationStation -------------------------------------------------
+# Start EmulationStation by itself after boot: yes or no (default: no).
+# With no, tty1 shows a shell and a hint how to start it.
+ES_AUTOSTART=no
+
 # --- Web UI (https://<device>:11944) -------------------------------
 WEB_USER=zocken
 WEB_PASSWORD=zocken

@@ -93,6 +93,7 @@ func newEnv(t *testing.T) *env {
 		Runner:  priv.ExecRunner{},
 		Sysinfo: sysinfo.Collector{Root: "../sysinfo/testdata/root"},
 	}
+	startSession(t, cfg.Paths.RunDir)
 	return &env{d: d, cfg: cfg, h: NewHandler(d), roms: cfg.Paths.Roms}
 }
 
@@ -632,5 +633,19 @@ func TestListHidesFilesOfDescriptors(t *testing.T) {
 	}
 	if !reflect.DeepEqual(files, []string{"FF7.m3u", "FF7/FF7 (Disc 1).cue", "FF7/FF7 (Disc 2).cue"}) {
 		t.Fatalf("files = %q", files)
+	}
+}
+
+func TestLaunchWithoutSession(t *testing.T) {
+	e := newEnv(t)
+	e.write(t, "snes/Mario.sfc", "rom")
+	noSession(t, e.cfg.Paths.RunDir)
+	w := e.do("POST", "/games/snes/launch", url.Values{"rel": {"Mario.sfc"}})
+	if w.Code != http.StatusConflict ||
+		!strings.Contains(w.Header().Get("HX-Trigger")+w.Body.String(), "EmulationStation is not running on the device.") {
+		t.Fatalf("status = %d trigger = %q body = %s", w.Code, w.Header().Get("HX-Trigger"), w.Body)
+	}
+	if _, err := os.Stat(filepath.Join(e.cfg.Paths.RunDir, "launch")); err == nil {
+		t.Fatal("launch file written without a session")
 	}
 }

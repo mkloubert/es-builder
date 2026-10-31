@@ -49,6 +49,14 @@ Edit `build.conf`. The file is plain `KEY=VALUE`. Values are not executed.
   (SSH, console, `sudo`).
 - `USER_SSH_PUBKEY` (optional): your public SSH key, so you can log in without a password.
 - `HOSTNAME`: the device name. Default `emulationstation`.
+- `ES_AUTOSTART`: `yes` or `no`. Default **`no`**. With `yes`, the device boots straight into
+  EmulationStation. With `no`, the screen (tty1) logs in user `emulationstation` by itself and
+  shows a shell with a hint. To start EmulationStation there, type
+  `exec /usr/local/lib/emulationstation/es-session`. While it does not run, the web UI shows
+  "EmulationStation is off". It cannot start it, but all other pages work. Any other value
+  stops the build.
+  **Note:** older images always booted into EmulationStation. If you want that, set
+  `ES_AUTOSTART=yes` before you build.
 - `WEB_USER` and `WEB_PASSWORD`: login for the web UI. The defaults are `zocken` / `zocken`.
   Change them (here or later, see "Change the default access").
 - `TLS_EXTRA_SANS` (optional): more names or IP addresses for the HTTPS certificate, separated by

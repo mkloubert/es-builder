@@ -36,8 +36,13 @@ Before you start:
 
 ## 2. First boot (Pi 4)
 
-- [ ] The Pi boots straight into EmulationStation with the EpicNoir theme. No wizard, no login
-  prompt, no manual step. Expected: the ES start screen on the TV.
+- [ ] With `ES_AUTOSTART=yes`: the Pi boots straight into EmulationStation with the EpicNoir
+  theme. No wizard, no login prompt, no manual step. Expected: the ES start screen on the TV.
+- [ ] With `ES_AUTOSTART=no` (default): tty1 shows a shell (user `emulationstation`) and the hint
+  "EmulationStation autostart is off". The web UI dashboard shows "EmulationStation is off" with
+  no ES buttons. Upload and controller changes work at once. Typing
+  `exec /usr/local/lib/emulationstation/es-session` starts ES; the web UI then shows "running",
+  and the ES buttons work.
 - [ ] The root file system grows to the size of the card. `df -h /` shows about the card size.
 - [ ] `cat /etc/machine-id` shows 32 hex digits (not `uninitialized`). SSH host keys exist in
   `/etc/ssh/ssh_host_*`.

@@ -32,11 +32,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       {{else if eq .State.Kind "stopped"}}
         <span class="h-3 w-3 rounded-full bg-zinc-500"></span>
         <p class="text-lg font-semibold">EmulationStation stopped</p>
+      {{else if eq .State.Kind "off"}}
+        <span class="h-3 w-3 rounded-full bg-zinc-600"></span>
+        <div class="min-w-0">
+          <p class="text-lg font-semibold">EmulationStation is off</p>
+          <p class="text-sm text-zinc-400">Autostart is off. Start it on the device screen.</p>
+        </div>
       {{else}}
         <span class="h-3 w-3 rounded-full bg-amber-400"></span>
         <p class="text-lg font-semibold">Status unknown</p>
       {{end}}
     </div>
+    {{if ne .State.Kind "off"}}
     <div class="mt-6 flex flex-wrap gap-3">
       {{if eq .State.Kind "game"}}
       <form method="post" action="/game/stop" hx-post="/game/stop" hx-target="#status" hx-swap="outerHTML" hx-confirm="The running game will be stopped. Unsaved progress will be lost.">
@@ -56,6 +63,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </form>
       {{end}}
     </div>
+    {{end}}
   </section>
 
   <section class="rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:p-6" aria-labelledby="dev-title">

@@ -80,13 +80,15 @@ EOF2
   CFG_USER_PASSWORD='"quoted" pass$(id)`x`'
   CFG_USER_SSH_PUBKEY='ssh-ed25519 AAAA me@host'
   CFG_WEB_USER=zocken CFG_WEB_PASSWORD=''
-  CFG_HOSTNAME=retro CFG_TLS_EXTRA_SANS='DNS:a.lan,IP:10.0.0.2'
+  CFG_HOSTNAME=retro CFG_TLS_EXTRA_SANS='DNS:a.lan,IP:10.0.0.2' CFG_ES_AUTOSTART=yes
   local f="$BATS_TEST_TMPDIR/build.env"
   app_write_env "$f"
   [ "$(stat -c %a "$f")" = 600 ]
   grep -qx 'HOSTNAME="retro"' "$f"
-  CFG_USER_PASSWORD=changed CFG_TLS_EXTRA_SANS=changed
+  grep -qx 'ES_AUTOSTART="yes"' "$f"
+  CFG_USER_PASSWORD=changed CFG_TLS_EXTRA_SANS=changed CFG_ES_AUTOSTART=no
   config_load "$f"
+  [ "$CFG_ES_AUTOSTART" = yes ]
   [ "$CFG_USER_PASSWORD" = '"quoted" pass$(id)`x`' ]
   [ "$CFG_TLS_EXTRA_SANS" = 'DNS:a.lan,IP:10.0.0.2' ]
   [ "$CFG_USER_SSH_PUBKEY" = 'ssh-ed25519 AAAA me@host' ]

@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -49,13 +50,31 @@ func newDeps(t *testing.T) (Deps, *bytes.Buffer) {
 	}
 	cfg := &config.Config{WebUser: "u", WebPasswordHash: hash}
 	var logw bytes.Buffer
-	return Deps{
+	d := Deps{
 		Config:  func() *config.Config { return cfg },
 		Systems: func() []systems.System { return nil },
 		ES:      &es.Controller{RunDir: t.TempDir(), StopTimeout: time.Second},
 		Sysinfo: sysinfo.Collector{Root: "../sysinfo/testdata/root"},
 		LogW:    &logw,
-	}, &logw
+	}
+	startSession(t, d.ES.RunDir)
+	return d, &logw
+}
+
+// startSession makes the controller see a running es-session (session.pid = own PID).
+func startSession(t *testing.T, runDir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(runDir, "session.pid"), []byte(fmt.Sprint(os.Getpid())), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// noSession removes session.pid: no es-session runs (ES_AUTOSTART=no).
+func noSession(t *testing.T, runDir string) {
+	t.Helper()
+	if err := os.Remove(filepath.Join(runDir, "session.pid")); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func authed(r *http.Request) *http.Request {
@@ -452,5 +471,36 @@ func TestGzipKeepsEventStreamPlain(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Header().Get("Content-Encoding") != "" || rec.Body.String() != "data: x\n\n" || !rec.Flushed {
 		t.Fatalf("%v %q", rec.Header(), rec.Body.String())
+	}
+}
+
+func TestDashboardOff(t *testing.T) {
+	d, _ := newDeps(t)
+	writeRun(t, d, "state", "es\n") // a left state file is ignored without a session
+	noSession(t, d.ES.RunDir)
+	w := serve(NewHandler(d), authed(httptest.NewRequest("GET", "/partials/status", nil)))
+	b := w.Body.String()
+	if w.Code != 200 || !strings.Contains(b, "EmulationStation is off") ||
+		!strings.Contains(b, "Autostart is off. Start it on the device screen.") {
+		t.Fatalf("code=%d body=%s", w.Code, b)
+	}
+	for _, p := range []string{"/es/start", "/es/stop", "/es/restart"} {
+		if strings.Contains(b, p) {
+			t.Errorf("button %s shown without a session", p)
+		}
+	}
+}
+
+func TestESStartWithoutSession(t *testing.T) {
+	d, _ := newDeps(t)
+	noSession(t, d.ES.RunDir)
+	for _, p := range []string{"/es/start", "/es/restart"} {
+		req := authed(httptest.NewRequest("POST", p, nil))
+		req.Header.Set("HX-Request", "true")
+		w := serve(NewHandler(d), req)
+		if w.Code != http.StatusConflict ||
+			!strings.Contains(w.Header().Get("HX-Trigger"), "EmulationStation is not running on the device. Start it on the device screen.") {
+			t.Errorf("%s: code=%d trigger=%q", p, w.Code, w.Header().Get("HX-Trigger"))
+		}
 	}
 }

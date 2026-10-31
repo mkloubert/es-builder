@@ -29,7 +29,16 @@ import (
 	"time"
 )
 
+// newCtl returns a controller with a running session (session.pid holds the test's own PID).
 func newCtl(t *testing.T) *Controller {
+	t.Helper()
+	c := newCtlNoSession(t)
+	write(t, c, "session.pid", fmt.Sprint(os.Getpid()))
+	return c
+}
+
+// newCtlNoSession returns a controller without a session (no es-session runs).
+func newCtlNoSession(t *testing.T) *Controller {
 	t.Helper()
 	return &Controller{RunDir: t.TempDir(), StopTimeout: 2 * time.Second}
 }
@@ -458,5 +467,122 @@ func TestStopRefusesDuringGame(t *testing.T) {
 	}
 	if exists(c, "hold") {
 		t.Error("hold created")
+	}
+}
+
+// deadPID returns the PID of a process that has ended and was reaped.
+func deadPID(t *testing.T) int {
+	t.Helper()
+	cmd := exec.Command("true")
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	return cmd.Process.Pid
+}
+
+func TestSessionRunning(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string // "" = no file
+		want    bool
+	}{
+		{"no file", "", false},
+		{"junk", "abc\n", false},
+		{"dead pid", fmt.Sprint(deadPID(t)), false},
+		{"own pid", fmt.Sprint(os.Getpid()), true},
+	}
+	for _, tc := range cases {
+		c := newCtlNoSession(t)
+		if tc.content != "" {
+			write(t, c, "session.pid", tc.content)
+		}
+		if got := c.SessionRunning(); got != tc.want {
+			t.Errorf("%s: got %v want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestStateOffWithoutSession(t *testing.T) {
+	c := newCtlNoSession(t)
+	write(t, c, "state", "es\n")
+	if got := c.State(); got.Kind != "off" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestNoSessionActions(t *testing.T) {
+	c := newCtlNoSession(t)
+	write(t, c, "hold", "")
+	for name, fn := range map[string]func() error{
+		"Start":   c.Start,
+		"Restart": c.Restart,
+		"Launch":  func() error { return c.Launch("snes", "/r/x.sfc") },
+	} {
+		if err := fn(); !errors.Is(err, ErrNoSession) {
+			t.Errorf("%s: got %v", name, err)
+		}
+	}
+	if !exists(c, "hold") || exists(c, "launch") {
+		t.Errorf("files changed: hold=%v launch=%v", exists(c, "hold"), exists(c, "launch"))
+	}
+}
+
+func TestStopWithoutSession(t *testing.T) {
+	c := newCtlNoSession(t)
+	if err := c.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if exists(c, "hold") {
+		t.Error("hold created")
+	}
+}
+
+func TestStopGameWithoutSession(t *testing.T) {
+	c := newCtlNoSession(t)
+	write(t, c, "state", "game\tsnes\t/r/x.sfc\n")
+	write(t, c, "game.pid", "12345")
+	if err := c.StopGame(); !errors.Is(err, ErrNoGame) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestWithESStoppedWithoutSession(t *testing.T) {
+	c := newCtlNoSession(t)
+	want := errors.New("fn failed")
+	calls := 0
+	start := time.Now()
+	err := c.WithESStopped(context.Background(), func() error { calls++; return want })
+	if !errors.Is(err, want) || calls != 1 {
+		t.Fatalf("err=%v calls=%d", err, calls)
+	}
+	if d := time.Since(start); d > 500*time.Millisecond {
+		t.Errorf("took %v", d)
+	}
+	if exists(c, "hold") {
+		t.Error("hold left behind")
+	}
+}
+
+func TestWithESStoppedWithoutSessionHoldsDuringFn(t *testing.T) {
+	// a wrapper that starts while fn runs (boot, re-login) must not start ES
+	c := newCtlNoSession(t)
+	var holdDuring bool
+	if err := c.WithESStopped(context.Background(), func() error {
+		holdDuring = exists(c, "hold")
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !holdDuring {
+		t.Error("no hold while fn ran")
+	}
+	if exists(c, "hold") {
+		t.Error("hold left behind")
+	}
+	// a hold that the user set before stays
+	write(t, c, "hold", "")
+	_ = c.WithESStopped(context.Background(), func() error { return nil })
+	if !exists(c, "hold") {
+		t.Error("user hold removed")
 	}
 }

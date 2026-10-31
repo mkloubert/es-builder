@@ -66,9 +66,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	s.partial(w, http.StatusOK, "status", s.status())
 }
 
-// actionError maps a controller error to an HTTP status and German message.
+// actionError maps a controller error to an HTTP status and a message for the user.
 func actionError(err error) (int, string) {
 	switch {
+	case errors.Is(err, es.ErrNoSession):
+		return http.StatusConflict, "EmulationStation is not running on the device. Start it on the device screen."
 	case errors.Is(err, es.ErrStopTimeout):
 		return http.StatusGatewayTimeout, "EmulationStation did not stop in time."
 	case errors.Is(err, es.ErrNotRunning):

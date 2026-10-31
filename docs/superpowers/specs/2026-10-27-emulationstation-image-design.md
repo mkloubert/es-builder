@@ -13,7 +13,7 @@ Bash scripts that build a finished, bootable image on **Linux and macOS** (each 
 
 Success criteria:
 
-1. The Pi boots straight into EmulationStation with EpicNoir, without any manual step.
+1. With `ES_AUTOSTART=yes` the Pi boots straight into EmulationStation with EpicNoir, without any manual step (default `no`, see `2026-10-31-es-autostart-design.md`).
 2. The web UI is reachable at `https://<device>:11944` (Basic Auth `zocken`/`zocken`, changeable).
 3. SSH on port `11911`; from outside **only** 11911 and 11944 are open.
 4. 5 failed logins (SSH **or** web) → IP banned for 1 hour.

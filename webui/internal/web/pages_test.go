@@ -553,3 +553,24 @@ func TestPowerSingleFlight(t *testing.T) {
 	}
 	waitFor(t, "reboot", func() bool { return len(fr.called()) == 1 })
 }
+
+func TestControllersActionWithoutSession(t *testing.T) {
+	e := newEnv(t)
+	cfgPath := e.controllerSetup(t)
+	noSession(t, e.cfg.Paths.RunDir)
+	start := time.Now()
+	w := e.do("POST", "/controllers/reset", url.Values{"guid": {"030000005e0400008e02000014010000"}})
+	if w.Code != 200 {
+		t.Fatalf("reset: %d %s", w.Code, w.Header().Get("HX-Trigger"))
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("reset waited %v without a session", d)
+	}
+	b, _ := os.ReadFile(cfgPath)
+	if strings.Contains(string(b), "X-Box 360") {
+		t.Fatalf("reset result: %s", b)
+	}
+	if _, err := os.Stat(filepath.Join(e.cfg.Paths.RunDir, "hold")); err == nil {
+		t.Fatal("hold left behind")
+	}
+}

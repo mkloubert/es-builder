@@ -18,12 +18,15 @@
 # App layer, in the chroot: EmulationStation session.
 #  - enables RetroPie's "autostart" module (autologin on tty1 + /etc/profile.d/10-retropie.sh,
 #    which runs autostart.sh on tty1 only, for user emulationstation only; SSH logins skip it),
-#  - sets autostart.sh to start our wrapper (es-session) instead of "emulationstation",
+#  - writes autostart.sh: with ES_AUTOSTART=yes it starts our wrapper (es-session) instead of
+#    "emulationstation"; with no it only prints a hint, so tty1 shows a shell (spec
+#    2026-10-31-es-autostart-design.md 3.2). The autologin on tty1 stays in both cases.
 #  - installs the EpicNoir theme at CFG_EPICNOIR_REF and makes it the active theme.
 # Checked at RetroPie-Setup f5ebfba6: "retropie_packages.sh autostart enable" calls enable_autostart
 # (module autostart.sh). On Debian with systemd it writes getty@tty1.service.d/autologin.conf (same
 # content as our overlay file); on "Raspbian" it would use raspi-config instead, so this script
-# checks the result. Environment: CFG_EPICNOIR_REF, CFG_TARGET (step 40).
+# checks the result. Environment: CFG_EPICNOIR_REF, CFG_TARGET (step 40); ES_AUTOSTART comes from
+# build.env (BUILD_ENV, read with config_load).
 # Idempotent. PROVISION_ROOT (tests only): path prefix. When sourced, only the functions load.
 set -euo pipefail
 
@@ -38,6 +41,7 @@ R=${PROVISION_ROOT:-}
 H=$R/home/$U
 THEME_URL=https://github.com/c64-dev/es-theme-epicnoir.git
 THEME_NAME=es-epicnoir
+SESSION=/usr/local/lib/emulationstation/es-session
 
 # set_file <mode> <path> : root:root, given mode; the file must exist
 set_file() {
@@ -57,6 +61,26 @@ set_theme_setting() {
     grep -v 'name="ThemeSet"' "$file" >"$tmp" || true
   fi
   printf '<string name="ThemeSet" value="%s" />\n' "$theme" >>"$tmp"
+  chmod 0644 "$tmp"
+  mv -f "$tmp" "$file"
+}
+
+# write_autostart <file> <yes|no> : RetroPie's autostart.sh (run with bash on tty1 at login).
+# yes: start es-session; no: print a hint only. Temp file + rename, mode 0644.
+write_autostart() {
+  local file=$1 mode=$2 tmp
+  case "$mode" in
+    yes | no) ;;
+    *) die "ES_AUTOSTART must be yes or no (found: $mode)" ;;
+  esac
+  tmp=$(mktemp "$file.XXXXXX")
+  if [ "$mode" = yes ]; then
+    printf 'exec %s\n' "$SESSION" >"$tmp"
+  else
+    printf '%s\n' '# EmulationStation autostart is off (build.conf ES_AUTOSTART=no).' \
+      'echo "EmulationStation autostart is off. To start it, type:"' \
+      "echo \"  exec $SESSION\"" >"$tmp"
+  fi
   chmod 0644 "$tmp"
   mv -f "$tmp" "$file"
 }
@@ -88,9 +112,13 @@ install_autostart() {
   chmod 0644 "$login"
 
   mkdir -p "$R/opt/retropie/configs/all"
-  printf 'exec /usr/local/lib/emulationstation/es-session\n' >"$R/opt/retropie/configs/all/autostart.sh"
+  write_autostart "$R/opt/retropie/configs/all/autostart.sh" "${CFG_ES_AUTOSTART:-}"
   chown "$U:$U" "$R/opt/retropie/configs/all/autostart.sh"
-  log "Autostart enabled (tty1 only), autostart.sh starts es-session"
+  if [ "$CFG_ES_AUTOSTART" = yes ]; then
+    log "Autostart: ES starts at boot (tty1 only, autostart.sh starts es-session)"
+  else
+    log "Autostart: off, tty1 shows a shell"
+  fi
 }
 
 install_theme() {
@@ -109,8 +137,23 @@ install_theme() {
   log "Theme $THEME_NAME at $ref is active"
 }
 
+# read_autostart <build.env> : sets CFG_ES_AUTOSTART from build.env. Read in a subshell:
+# config_load resets every CFG_* key (CFG_EPICNOIR_REF comes from the environment, not from
+# build.env), and log.sh would replace this script's log/die.
+read_autostart() {
+  local lib=${PROVISION_LIB:-${PROVISION_DIR:-/root/provision}/lib} v
+  # shellcheck source=/dev/null
+  v=$(
+    . "$lib/log.sh"
+    . "$lib/config.sh"
+    config_load "$1" >&2 && printf '%s' "$CFG_ES_AUTOSTART"
+  ) || die "Cannot read ES_AUTOSTART from $1"
+  CFG_ES_AUTOSTART=$v
+}
+
 main() {
   getent passwd "$U" >/dev/null || die "User $U is missing"
+  read_autostart "${BUILD_ENV:-${PROVISION_DIR:-/root/provision}/build.env}"
   install_autostart
   install_theme
 }

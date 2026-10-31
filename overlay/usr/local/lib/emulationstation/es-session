@@ -23,6 +23,8 @@
 #   launch    "<system><TAB><rom>": start this game (this script deletes the file)
 #   es.pid    PID of ES while it runs
 #   game.pid  process group ID of the game while it runs
+#   session.pid  PID of this script while it runs (written before ES starts, removed at the end).
+#             The web service uses it to see if a session runs at all; without one it ignores state.
 # ES itself leaves flag files in $TMP_DIR (es-restart, es-sysrestart, es-shutdown). This
 # script handles them, so ES_BIN must be the real ES binary, not RetroPie's /usr/bin wrapper.
 #
@@ -57,8 +59,18 @@ clean_exit=0
 
 trap ':' INT QUIT TSTP
 
-# on_exit : EXIT trap. Stop ES and end the login session, unless the end was planned.
+# cleanup_session : remove session.pid, but only if it is ours (a second wrapper started by hand
+# must not remove the file of the first one)
+cleanup_session() {
+  if [ "$(cat "$RUN_DIR/session.pid" 2>/dev/null || true)" = "$$" ]; then
+    rm -f "$RUN_DIR/session.pid"
+  fi
+}
+
+# on_exit : EXIT trap. Remove session.pid. Stop ES and end the login session, unless the
+# end was planned.
 on_exit() {
+  cleanup_session
   if [ "$clean_exit" -eq 1 ]; then return 0; fi
   if [ -n "$es_pid" ]; then kill -TERM "$es_pid" 2>/dev/null || true; fi
   log "ending abnormally; sending SIGHUP to $EXIT_HUP_TARGET"
@@ -203,12 +215,23 @@ power() {
 }
 
 main() {
-  local iter=0
+  local iter=0 other
   mkdir -p "$RUN_DIR"
+  # Only one session: a second wrapper (for example started by hand over SSH) would take over
+  # session.pid and remove it at its end, so the web UI would no longer see the running session.
+  other=$(cat "$RUN_DIR/session.pid" 2>/dev/null || true)
+  if [[ "$other" =~ ^[0-9]+$ ]] && [ "$other" -gt 1 ] && [ "$other" != "$$" ] &&
+    kill -0 "$other" 2>/dev/null; then
+    log "another session runs (PID $other); ending"
+    printf 'Another EmulationStation session runs already (PID %s).\n' "$other" >&2
+    clean_exit=1
+    exit 1
+  fi
   # Leftovers of a crashed run: the PIDs are stale (a reused PID could be signalled by the web
   # service). hold and launch stay: they are requests from the web service. (/run is
   # cleared at reboot anyway.)
   rm -f "$RUN_DIR/es.pid" "$RUN_DIR/game.pid"
+  write_pid session.pid $$
   while :; do
     if [ "$MAX_ITER" -gt 0 ] && [ "$iter" -ge "$MAX_ITER" ]; then
       clean_exit=1

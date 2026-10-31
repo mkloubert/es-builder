@@ -34,6 +34,10 @@ setup() {
   chmod 440 "$R/etc/sudoers.d/emulationstation"
   : >"$R/opt/retropie/configs/all/emulationstation/themes/es-epicnoir/theme.xml"
   echo '<string name="ThemeSet" value="es-epicnoir" />' >"$R/opt/retropie/configs/all/emulationstation/es_settings.cfg"
+  # autostart.sh in the "no" form (default)
+  # (the script sets its own R, so the path is fixed before it is sourced)
+  AUTOSTART="$R/opt/retropie/configs/all/autostart.sh"
+  (. "$ROOT/provision/common/app-20-es.sh" && write_autostart "$AUTOSTART" no)
   local u
   for u in ssh nftables fail2ban emulationstation-firstboot; do
     ln -s "/lib/systemd/system/$u.service" "$R/etc/systemd/system/multi-user.target.wants/$u.service"
@@ -92,6 +96,20 @@ shared_lines() {
   [ "$status" -eq 0 ]
   [[ $output == *"PASS: first boot script installed and set to /boot/efi"* ]]
   [[ $output != *"FAIL:"* ]]
+}
+
+@test "shared checks: autostart.sh yes and no forms pass, another command fails" {
+  run shared_lines rpi4-static.sh
+  [[ $output == *"PASS: autostart.sh: es-session (yes) or the off hint (no)"* ]]
+  (. "$ROOT/provision/common/app-20-es.sh" && write_autostart "$AUTOSTART" yes)
+  run shared_lines rpi4-static.sh
+  [[ $output == *"PASS: autostart.sh: es-session (yes) or the off hint (no)"* ]]
+  printf 'emulationstation #auto\n' >"$R/opt/retropie/configs/all/autostart.sh"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"FAIL: autostart.sh: es-session (yes) or the off hint (no)"* ]]
+  printf '# EmulationStation autostart is off\nexec emulationstation\n' >"$R/opt/retropie/configs/all/autostart.sh"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"FAIL: autostart.sh: es-session (yes) or the off hint (no)"* ]]
 }
 
 @test "shared checks: each broken item is reported" {

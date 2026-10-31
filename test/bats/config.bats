@@ -96,3 +96,32 @@ setup() {
   config_load "$BATS_TEST_TMPDIR/own.conf"
   [ "$CFG_SOURCE_URL" = "https://example.org/src" ]
 }
+
+@test "config_load: ES_AUTOSTART defaults to no" {
+  config_load "$FIX/build.conf.simple"
+  [ "$CFG_ES_AUTOSTART" = no ]
+}
+
+@test "config_load: ES_AUTOSTART yes, no and \"yes\" are accepted" {
+  local f="$BATS_TEST_TMPDIR/c" v
+  for v in yes no '"yes"'; do
+    printf 'USER_PASSWORD=x\nES_AUTOSTART=%s\n' "$v" >"$f"
+    config_load "$f"
+    [ "$CFG_ES_AUTOSTART" = "${v//\"/}" ]
+  done
+}
+
+@test "config_load: ES_AUTOSTART Yes, 1 or empty -> error with the value" {
+  local f="$BATS_TEST_TMPDIR/c"
+  printf 'ES_AUTOSTART=Yes\n' >"$f"
+  run config_load "$f"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"ES_AUTOSTART must be yes or no (found: Yes)"* ]]
+  printf 'ES_AUTOSTART=1\n' >"$f"
+  run config_load "$f"
+  [ "$status" -eq 1 ]
+  printf 'ES_AUTOSTART=\n' >"$f"
+  run config_load "$f"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"(found: )"* ]]
+}
