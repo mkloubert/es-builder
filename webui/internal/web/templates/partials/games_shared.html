@@ -18,39 +18,43 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 {{/* Pending-changes banner and "game running" dialog shared by the games pages. */}}
 {{define "changes_banner"}}<div id="changes-banner" hx-get="/partials/changes" hx-trigger="changes-updated from:body" hx-swap="outerHTML">
 {{if .Count}}
-  <section class="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 p-4 md:p-5" aria-labelledby="changes-title">
-    <h2 id="changes-title" class="text-sm font-semibold text-red-300">{{.Count}} pending {{if eq .Count 1}}change{{else}}changes{{end}}</h2>
-    <p class="mt-1 text-xs text-zinc-400">The changes are only made when you click “Apply”. EmulationStation is paused briefly.</p>
-    <details class="mt-3 text-sm text-zinc-300">
-      <summary class="cursor-pointer select-none text-zinc-400 hover:text-zinc-100">Show details</summary>
-      <ul class="mt-2 space-y-1">
-        {{range .Items}}<li class="truncate">{{if eq .Kind "delete"}}<span class="text-red-400">Delete</span>{{else}}<span class="text-emerald-400">Rename</span>{{end}} · {{.System}} · {{.Rel}}{{if .Name}} → {{.Name}}{{end}}</li>{{end}}
+  <section class="banner banner-danger mb-6 flex-col !items-stretch gap-0 p-4" aria-labelledby="changes-title">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
+      <div class="min-w-0 flex-1 basis-64">
+        <h2 id="changes-title" class="flex items-center gap-2 text-sm font-semibold">{{icon "circle-alert"}}{{.Count}} pending {{if eq .Count 1}}change{{else}}changes{{end}}</h2>
+        <p class="mt-1 text-xs text-muted">The changes are only made when you click “Apply”. EmulationStation is paused briefly.</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <form method="post" action="/changes/apply" hx-post="/changes/apply" hx-swap="none" hx-disabled-elt="find button"{{if .Deletes}} hx-confirm="{{.Deletes}} {{if eq .Deletes 1}}game will{{else}}games will{{end}} be deleted for good."{{end}}>
+          <button id="apply-changes" class="btn btn-sm btn-primary{{if .Deletes}} btn-danger{{end}}">Apply</button>
+        </form>
+        <form method="post" action="/changes/discard" hx-post="/changes/discard" hx-swap="none" hx-confirm="Discard all pending changes?">
+          <button class="btn btn-sm">Discard</button>
+        </form>
+      </div>
+    </div>
+    <details class="mt-3 text-sm">
+      <summary class="cursor-pointer select-none font-mono text-[10px] uppercase tracking-[0.12em] text-muted hover:text-fg">Show details</summary>
+      <ul class="mt-2 space-y-1 text-fg">
+        {{range .Items}}<li class="truncate">{{if eq .Kind "delete"}}<span class="badge badge-danger mr-1">Delete</span>{{else}}<span class="badge badge-ok mr-1">Rename</span>{{end}} <span class="font-mono text-xs text-muted">{{.System}} · {{.Rel}}</span>{{if .Name}} → {{.Name}}{{end}}</li>{{end}}
       </ul>
     </details>
-    <div class="mt-4 flex flex-wrap gap-3">
-      <form method="post" action="/changes/apply" hx-post="/changes/apply" hx-swap="none" hx-disabled-elt="find button"{{if .Deletes}} hx-confirm="{{.Deletes}} {{if eq .Deletes 1}}game will{{else}}games will{{end}} be deleted for good."{{end}}>
-        <button class="rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:opacity-50">Apply</button>
-      </form>
-      <form method="post" action="/changes/discard" hx-post="/changes/discard" hx-swap="none" hx-confirm="Discard all pending changes?">
-        <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Discard</button>
-      </form>
-    </div>
   </section>
 {{end}}
 </div>{{end}}
 
 {{define "force_dialog"}}<div x-data="{ open: true }" x-show="open" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
   role="dialog" aria-modal="true" aria-labelledby="force-title" @keydown.escape.window="open = false">
-  <div class="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
-    <h2 id="force-title" class="text-lg font-semibold">A game is running</h2>
-    <p class="mt-2 text-sm text-zinc-300">{{.Message}}</p>
-    <p class="mt-1 text-xs text-zinc-500">Unsaved progress will be lost.</p>
+  <div class="w-full max-w-sm border border-line-strong bg-raised p-6 shadow-[0_12px_30px_rgb(0_0_0/0.65)]">
+    <h2 id="force-title" class="font-display text-[28px] leading-none tracking-[0.02em]">A game is running</h2>
+    <p class="mt-3 text-sm text-fg">{{.Message}}</p>
+    <p class="mt-1 text-xs text-muted">Unsaved progress will be lost.</p>
     <div class="mt-6 flex justify-end gap-3">
-      <button type="button" @click="open = false" class="rounded-lg px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Cancel</button>
+      <button type="button" @click="open = false" class="btn">Cancel</button>
       <form method="post" action="{{.Action}}" hx-post="{{.Action}}" hx-swap="none" @htmx:after-request="open = false">
         {{range .Fields}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
         {{end}}<input type="hidden" name="force" value="1">
-        <button x-effect="if (open) $nextTick(() => $el.focus())" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">{{.Label}}</button>
+        <button x-effect="if (open) $nextTick(() => $el.focus())" class="btn btn-danger btn-primary">{{.Label}}</button>
       </form>
     </div>
   </div>

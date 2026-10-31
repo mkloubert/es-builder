@@ -121,6 +121,15 @@ warning.
   Expected: the toast "Web UI reloaded.", the card shows "1 custom files in use", the dashboard
   shows the new text. Then break the file (for example remove `{{end}}`) and reload. Expected: the
   error card, and the built-in dashboard still works.
+- [ ] Redesign on a phone: the menu button opens and closes the menu. With a keyboard, Escape
+  closes the menu.
+- [ ] Redesign on a phone: the "..." menus open and close, and their entries can be tapped.
+- [ ] Redesign on a phone: the upload dropzone accepts a file (tap to choose, or drop on a
+  tablet).
+- [ ] Redesign: the fonts render as Bebas Neue (headings), Inter (text) and Geist Mono (labels, buttons), and
+  not as a fallback font. No request goes to the internet (browser network tab).
+- [ ] Page "About & licenses" opens from the footer of every page and shows the copyright, the
+  warranty note, the source link and the license texts.
 
 ## 6. EmulationStation and games
 

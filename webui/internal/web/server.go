@@ -132,6 +132,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 		files.ServeHTTP(w, r)
 	})))
 	s.dashboardRoutes(mux)
+	s.aboutRoutes(mux)
 	s.gamesRoutes(mux)
 	s.uploadRoutes(mux)
 	s.usbRoutes(mux)

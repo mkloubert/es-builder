@@ -306,8 +306,19 @@ give comes from the web service itself.
   time. On the device, use the classes that already exist or your own CSS file.
 - Your templates get the same data as the built-in ones. A later update can change this data, so
   check your templates after an update.
+- Custom templates from before the redesign ("Noir Grid") must be adapted to the new markup and
+  CSS classes. `navItem.Icon` now holds a Lucide icon name, so a copied custom layout must use
+  `{{icon .Icon}}`. The `icon` function knows only the icons of the built-in sprite
+  (`webui/assets/icons.txt`). Add more with `webui/scripts/icons.sh`. The layout blocks
+  `subtitle` and `actions` are optional.
 - `UI_DIR` in `/etc/emulationstation-web/web.conf` (default
   `/home/emulationstation/webui-custom`) is the folder. An empty value turns custom files off.
+
+## About & licenses
+
+The page "About & licenses" (`/about`) is reachable from every page. It shows the copyright, the
+note that there is no warranty, a link to the source code (from `SOURCE_URL`), the text of the
+AGPL and the licenses of the embedded third-party parts.
 
 ## Import from a USB stick
 
@@ -440,5 +451,9 @@ source in its footer; set `SOURCE_URL` in `build.conf` for your fork.
 Third-party parts keep their own licenses. The image contains RetroPie, many emulators and the
 EpicNoir theme. **EpicNoir is licensed under CC BY-NC-SA 4.0 (non-commercial).** So you must not
 distribute the images commercially. Build your images for your own use.
+
+The third-party parts that are embedded in the web UI (fonts, icons, scripts) and their licenses
+are listed in `webui/internal/legal/THIRD-PARTY-NOTICES` and on the web UI page "About & licenses"
+(`/about`).
 
 Source code: <https://github.com/mkloubert/es-builder>

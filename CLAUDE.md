@@ -29,6 +29,16 @@ Go web UI (`webui/`) on HTTPS port 11944 to manage ROMs, BIOS files, controllers
 7. **Spec first.** For new features or changes to behaviour, change or add a spec in
    `docs/superpowers/specs/` first, then a plan in `docs/superpowers/plans/`. If the code and the
    spec disagree, the spec wins, unless the owner decides otherwise.
+8. **Third-party licenses (AGPL compatibility).** Before you add outside code, a font, an icon,
+   an image or another asset, check its license. Allowed: permissive licenses (MIT, BSD, ISC,
+   0BSD, Apache-2.0), OFL-1.1 for fonts, and GPL-3/AGPL-3 code. Not allowed in our code or the web
+   binary: non-commercial (NC), no-derivatives (ND), or unclear or missing licenses. EpicNoir
+   (CC BY-NC-SA) is only an aggregate in the image, so never copy its files, images or fonts into
+   our code. Everything embedded must be listed with its full license text in
+   `THIRD-PARTY-NOTICES` and shown on the web UI page "About & licenses". Keep vendor files
+   unchanged. Fonts are not subset, so OFL Reserved Font Names cause no trouble. Assets are always
+   embedded and never loaded from the internet. The AGPL legal notices (copyright, no warranty,
+   license link, and the source link per section 13) must be reachable from every web UI page.
 
 ## Commands
 

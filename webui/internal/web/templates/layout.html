@@ -16,77 +16,104 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */ -}}
 {{define "layout"}}<!doctype html>
-<html lang="en" class="bg-zinc-950">
+<html lang="en" class="bg-bg">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
 <meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0a0a0b">
 <title>{{.Title}} · EmuStation Builder</title>
+<link rel="preload" href="/static/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/GeistMono-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/app.js" defer></script>
 <script src="/static/vendor/htmx.min.js" defer></script>
 <script src="/static/vendor/alpine.min.js" defer></script>
 </head>
-<body class="min-h-screen bg-zinc-950 font-sans text-zinc-100 antialiased selection:bg-red-500/30"
+<body class="min-h-screen bg-bg font-sans text-fg antialiased selection:bg-accent/30"
   x-data="{ toasts: [], nextId: 1,
     toast(msg) { const id = this.nextId++; this.toasts.push({ id, msg }); setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id) }, 6000) },
-    dialog: { open: false, message: '', proceed: null },
-    ask(d) { this.dialog = { open: true, message: d.message, proceed: d.proceed } },
-    yes() { const p = this.dialog.proceed; this.dialog.open = false; if (p) p() } }"
-  x-effect="document.body.classList.toggle('confirming', dialog.open)"
+    menu: false,
+    openMenu() { this.menu = true; this.$nextTick(() => this.$refs.menuClose.focus()) },
+    closeMenu() { this.menu = false; this.$nextTick(() => this.$refs.burger.focus()) },
+    dialog: { open: false, message: '', proceed: null, danger: false, back: null },
+    ask(d) { this.dialog = { open: true, message: d.message, proceed: d.proceed, danger: !!d.danger, back: document.activeElement } },
+    closeDialog() { const b = this.dialog.back; this.dialog.open = false; if (b && document.body.contains(b)) this.$nextTick(() => b.focus()) },
+    yes() { const p = this.dialog.proceed; this.closeDialog(); if (p) p() } }"
+  x-effect="document.body.classList.toggle('confirming', dialog.open); document.body.classList.toggle('menu-open', menu)"
   @toast.window="toast($event.detail.value)"
   @ask-confirm.window="ask($event.detail)">
+<a href="#content" class="skip-link">Skip to content</a>
 
-<aside class="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-zinc-800 bg-zinc-900/60 px-4 py-6 backdrop-blur md:flex">
-  <a href="/" class="mb-8 flex items-center gap-3 rounded-lg px-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
-    <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500 text-lg font-black text-zinc-950">E</span>
-    <span class="leading-tight"><span class="block text-sm font-semibold">EmuStation Builder</span><span class="block text-xs text-zinc-400">Admin</span></span>
-  </a>
-  <nav class="flex flex-col gap-1" aria-label="Main navigation">
-    {{range .Nav}}
-    <a href="{{.Href}}" {{if .Active}}aria-current="page"{{end}}
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 {{if .Active}}bg-red-500/10 text-red-400{{else}}text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100{{end}}">
-      <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{.Icon}}"/></svg>
-      {{.Label}}
-    </a>
-    {{end}}
+<aside id="sidebar" class="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col border-r border-line bg-bg md:flex">
+  <div class="flex h-14 flex-none items-center border-b border-line px-[18px]">{{template "layout-logo"}}</div>
+  <nav class="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 py-3" aria-label="Main navigation">
+    {{template "layout-nav" .Nav}}
   </nav>
+  <div class="legal flex-none border-t border-line px-[18px] py-4">{{template "layout-legal" .}}</div>
 </aside>
 
-<nav class="fixed inset-x-0 bottom-0 z-30 flex border-t border-zinc-800 bg-zinc-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main navigation">
-  {{range .Nav}}
-  <a href="{{.Href}}" {{if .Active}}aria-current="page"{{end}}
-    class="flex min-w-0 flex-1 flex-col items-center gap-1 px-0.5 py-2 text-[10px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 {{if .Active}}text-red-400{{else}}text-zinc-400{{end}}">
-    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{.Icon}}"/></svg>
-    <span class="w-full truncate text-center">{{.Label}}</span>
-  </a>
-  {{end}}
-</nav>
+<header class="phonebar md:hidden">
+  {{template "layout-logo"}}
+  <button type="button" x-ref="burger" class="btn btn-icon ml-auto" aria-label="Open menu"
+    aria-controls="mobile-menu" aria-expanded="false" :aria-expanded="menu" @click="openMenu()">{{icon "menu"}}</button>
+</header>
 
-<div class="md:pl-60">
-  {{if .CertWarning}}
-  <div role="alert" class="border-b border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 md:px-8">
-    {{if lt .CertDaysLeft 0}}The TLS certificate has expired.{{else}}The TLS certificate expires in {{.CertDaysLeft}} {{if eq .CertDaysLeft 1}}day{{else}}days{{end}}.{{end}}
-    Please renew it, or browsers will warn about the connection.
+<div id="mobile-menu" class="mobile-menu md:hidden" role="dialog" aria-modal="true" aria-label="Menu"
+  x-show="menu" x-cloak x-transition.opacity style="display:none"
+  @keydown.escape.window="menu && closeMenu()" @keydown.tab.window="menu && trapFocus($event, $el)">
+  <div class="phonebar">
+    {{template "layout-logo"}}
+    <button type="button" x-ref="menuClose" class="btn btn-icon ml-auto" aria-label="Close menu" @click="closeMenu()">{{icon "x"}}</button>
   </div>
-  {{end}}
-  <main class="mx-auto max-w-5xl px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-10">
-    <h1 class="mb-6 text-2xl font-semibold tracking-tight">{{.Title}}</h1>
-    {{template "content" .}}
-  </main>
-  <footer class="mx-auto max-w-5xl px-4 pb-24 text-xs text-zinc-500 md:px-8 md:pb-8">
-    EmuStation Builder · <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener" class="underline hover:text-zinc-300">AGPL-3.0</a>{{if .SourceURL}} · <a href="{{.SourceURL}}" target="_blank" rel="noopener" class="underline hover:text-zinc-300">Source code</a>{{end}}
-  </footer>
+  <nav class="flex flex-col py-2" aria-label="Main navigation">
+    {{template "layout-nav" .Nav}}
+  </nav>
+  <div class="legal mt-auto border-t border-line px-[18px] pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{{template "layout-legal" .}}</div>
 </div>
 
-<div class="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 md:bottom-6 md:items-end md:px-6" aria-live="polite">
+<div class="md:pl-[220px]">
+  <div class="topbar{{if .SectionHref}} is-sub{{end}}">
+    <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 md:px-6">
+      <nav aria-label="Breadcrumb" class="min-w-0">
+        <ol class="label-mono flex min-w-0 items-center">
+          {{- range $i, $c := .Crumb}}
+          <li class="flex min-w-0 items-center">
+            {{- if $i}}<span class="px-2 text-line-strong" aria-hidden="true">/</span>{{end -}}
+            {{- if $.IsLastCrumb $i}}<span class="truncate text-fg" aria-current="page">{{$c}}</span>
+            {{- else if and (eq $i 1) $.SectionHref}}<a href="{{$.SectionHref}}" class="text-muted underline-offset-4 hover:text-fg hover:underline">{{$c}}</a>
+            {{- else}}<span class="{{if and (eq $i 0) $.Section}}text-accent-fg{{end}}">{{$c}}</span>{{end -}}
+          </li>
+          {{- end}}
+        </ol>
+      </nav>
+      <div class="topbar-actions">{{block "actions" .}}{{end}}</div>
+    </div>
+  </div>
+  {{if .CertWarning}}
+  <div role="alert" class="banner banner-warn border-x-0 border-t-0 px-4 md:px-6">
+    {{icon "triangle-alert"}}
+    <span>{{if lt .CertDaysLeft 0}}The TLS certificate has expired.{{else}}The TLS certificate expires in {{.CertDaysLeft}} {{if eq .CertDaysLeft 1}}day{{else}}days{{end}}.{{end}}
+    Please renew it, or browsers will warn about the connection.</span>
+  </div>
+  {{end}}
+  <main id="content" tabindex="-1" class="mx-auto max-w-6xl px-4 pt-6 pb-12 focus:outline-none md:px-6 md:pt-8">
+    <div class="mb-6 md:mb-8">
+      <h1 class="font-display text-[40px] leading-[0.9] tracking-[0.02em] md:text-[56px]">{{.Title}}</h1>
+      <p class="mt-2 text-[13px] text-muted empty:hidden">{{block "subtitle" .}}{{end}}</p>
+    </div>
+    {{template "content" .}}
+  </main>
+  <footer id="legal" class="legal mx-auto max-w-6xl border-t border-line px-4 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:hidden">{{template "layout-legal" .}}</footer>
+</div>
+
+<div class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:items-end md:px-6 md:pb-6" aria-live="polite">
   <template x-for="t in toasts" :key="t.id">
-    <div class="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm shadow-xl shadow-black/40"
+    <div class="toast pointer-events-auto flex w-full max-w-sm items-start gap-3 border border-l-2 border-line-strong border-l-accent bg-raised py-2 pr-2 pl-4 text-[13px] text-fg"
       x-transition>
-      <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500"></span>
-      <span class="flex-1" x-text="t.msg"></span>
-      <button type="button" class="rounded text-zinc-400 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500" aria-label="Close" @click="toasts = toasts.filter(x => x.id !== t.id)">✕</button>
+      <span class="flex-1 py-1.5" x-text="t.msg"></span>
+      <button type="button" class="btn btn-icon border-transparent text-dim hover:text-fg" aria-label="Close" @click="toasts = toasts.filter(x => x.id !== t.id)">{{icon "x"}}</button>
     </div>
   </template>
 </div>
@@ -94,15 +121,30 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <div id="modal-slot"></div>
 
 <div x-show="dialog.open" x-cloak x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-  role="dialog" aria-modal="true" aria-labelledby="confirm-title" @keydown.escape.window="dialog.open = false" style="display:none">
-  <div class="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl" @click.outside="dialog.open = false">
-    <h2 id="confirm-title" class="text-lg font-semibold">Are you sure?</h2>
-    <p class="mt-2 text-sm text-zinc-300" x-text="dialog.message"></p>
-    <div class="mt-6 flex justify-end gap-3">
-      <button type="button" @click="dialog.open = false" class="rounded-lg px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Cancel</button>
-      <button type="button" @click="yes()" x-effect="if (dialog.open) $nextTick(() => $el.focus())" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Confirm</button>
+  role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg"
+  @keydown.escape.window="dialog.open && closeDialog()" @keydown.tab.window="dialog.open && trapFocus($event, $el)" style="display:none">
+  <div class="toast w-full max-w-sm border border-line-strong bg-raised" @click.outside="dialog.open && closeDialog()">
+    <div class="flex items-center gap-2 border-b border-line px-5 py-3.5">
+      <span class="text-accent-fg" x-show="dialog.danger">{{icon "triangle-alert"}}</span>
+      <h2 id="confirm-title" class="font-mono text-[11px] font-semibold uppercase tracking-[0.14em]">Are you sure?</h2>
+    </div>
+    <p id="confirm-msg" class="px-5 py-5 text-sm text-fg" x-text="dialog.message"></p>
+    <div class="flex justify-end gap-2 border-t border-line px-5 py-4">
+      <button type="button" class="btn" @click="closeDialog()">Cancel</button>
+      <button type="button" class="btn" :class="dialog.danger ? 'btn-danger btn-primary' : 'btn-primary'" @click="yes()" x-effect="if (dialog.open) $nextTick(() => $el.focus())">Confirm</button>
     </div>
   </div>
 </div>
 </body>
 </html>{{end}}
+
+{{- /* layout-logo: the EMUSTATION word mark, a link to the dashboard. */ -}}
+{{define "layout-logo"}}<a href="/" class="logo" aria-label="EmuStation Builder, Dashboard">EMU<span class="text-accent">STATION</span></a>{{end}}
+
+{{- /* layout-nav: the numbered nav entries; . is the list of nav items. */ -}}
+{{define "layout-nav"}}{{range .}}
+    <a href="{{.Href}}" {{if .Active}}aria-current="page"{{end}} class="nav-link">{{icon .Icon}}<span>{{.Label}}</span><span class="nav-num" aria-hidden="true">{{printf "%02d" .N}}</span></a>
+{{- end}}{{end}}
+
+{{- /* layout-legal: copyright, license and source links; . is the Page. */ -}}
+{{define "layout-legal"}}EmuStation Builder · <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">AGPL-3.0</a>{{if .SourceURL}} · <a href="{{.SourceURL}}" target="_blank" rel="noopener">Source code</a>{{end}} · <a href="/about">About &amp; licenses</a>{{end}}

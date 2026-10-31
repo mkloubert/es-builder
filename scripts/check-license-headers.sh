@@ -21,6 +21,7 @@
 # Excluded: .git, .superpowers, out, secrets, vendor/, testdata/, fixtures/
 # (content is checked by tests), controllers/custom/ (controller exports of the user),
 # webui-custom/ (web UI files of the user),
+# webui/internal/web/static/fonts and icons.svg (third-party files),
 # Markdown, JSON, go.mod/go.sum, LICENSE, the generated app.css and empty files.
 set -euo pipefail
 
@@ -62,7 +63,7 @@ while IFS= read -r f; do
     printf '%s\n' "${f#./}"
     missing=1
   fi
-done < <(find . \( -path ./.git -o -path ./.superpowers -o -path ./out -o -path ./secrets -o -path ./controllers/custom -o -path ./webui-custom \
+done < <(find . \( -path ./.git -o -path ./.superpowers -o -path ./out -o -path ./secrets -o -path ./controllers/custom -o -path ./webui-custom -o -path ./webui/internal/web/static/fonts -o -path ./webui/internal/web/static/icons.svg \
   -o -name vendor -o -name testdata -o -name fixtures -o -name node_modules \) -prune -o -type f -print | LC_ALL=C sort)
 
 exit "$missing"

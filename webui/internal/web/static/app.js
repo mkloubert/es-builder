@@ -16,7 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Glue between htmx and Alpine: confirmation dialogs and toasts.
+// Glue between htmx and Alpine: confirmation dialogs, toasts, busy state and focus trap.
 (function () {
   function toast(msg) {
     window.dispatchEvent(new CustomEvent("toast", { detail: { value: msg } }));
@@ -47,6 +47,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     return values;
   }
 
+  // isDanger tells if a confirmation comes from a delete action: the element (or the submit
+  // button of its form) has the class btn-danger or the attribute data-danger.
+  function isDanger(elt) {
+    var sel = ".btn-danger, [data-danger]";
+    if (elt.matches && elt.matches(sel)) return true;
+    if (elt.tagName !== "FORM") return false;
+    var btn = elt.querySelector("button[type=submit], button:not([type]), input[type=submit]");
+    return !!(btn && btn.matches(sel));
+  }
+
   document.addEventListener("htmx:confirm", function (evt) {
     if (!evt.detail.question) return;
     evt.preventDefault();
@@ -58,6 +68,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     window.dispatchEvent(new CustomEvent("ask-confirm", {
       detail: {
         message: d.question,
+        danger: isDanger(elt),
         proceed: function () {
           if (document.body.contains(elt)) {
             d.issueRequest(true);
@@ -91,6 +102,40 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     var first = row.querySelector("input:not([type=checkbox]), select");
     if (first) first.focus();
   });
+
+  // While an htmx request of a button or a form runs, that element is marked busy
+  // (the CSS dims busy buttons). Regions that poll, like #status, are not marked.
+  function busyTarget(evt) {
+    var el = evt.detail.elt;
+    if (!el || !el.tagName) return null;
+    return el.tagName === "BUTTON" || el.tagName === "FORM" ? el : null;
+  }
+  document.addEventListener("htmx:beforeRequest", function (evt) {
+    var el = busyTarget(evt);
+    if (el) el.setAttribute("aria-busy", "true");
+  });
+  document.addEventListener("htmx:afterRequest", function (evt) {
+    var el = busyTarget(evt);
+    if (el) el.removeAttribute("aria-busy");
+  });
+
+  // trapFocus keeps Tab and Shift+Tab inside root (phone menu, confirm dialog).
+  // Use it as @keydown.tab="trapFocus($event, $el)".
+  window.trapFocus = function (evt, root) {
+    var items = Array.prototype.filter.call(
+      root.querySelectorAll("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"),
+      function (el) { return el.getClientRects().length > 0; }
+    );
+    if (!items.length) return;
+    var first = items[0], last = items[items.length - 1], active = document.activeElement;
+    if (evt.shiftKey && (active === first || !root.contains(active))) {
+      evt.preventDefault();
+      last.focus();
+    } else if (!evt.shiftKey && (active === last || !root.contains(active))) {
+      evt.preventDefault();
+      first.focus();
+    }
+  };
 
   // Network failures.
   document.addEventListener("htmx:sendError", function () {
@@ -246,3 +291,40 @@ window.btLive = function () {
     },
   };
 };
+
+// rowMenu: the "..." menu of a game row (open state, arrow keys, rename mode).
+window.rowMenu = function () {
+  return {
+    edit: false,
+    menu: false,
+    items() { return [].slice.call(this.$refs.menu.querySelectorAll("[role=menuitem]")); },
+    toggle() {
+      this.menu = !this.menu;
+      if (this.menu) this.$nextTick(() => this.items()[0].focus());
+    },
+    close() { this.menu = false; this.$refs.btn.focus(); },
+    go(d) {
+      var it = this.items();
+      it[(it.indexOf(document.activeElement) + d + it.length) % it.length].focus();
+    },
+    rename() {
+      this.menu = false;
+      this.edit = true;
+      this.$nextTick(() => this.$root.querySelector("input[name=name]").focus());
+    },
+  };
+};
+
+// After a confirmed delete the row loses its menu. When the changes banner has
+// refreshed, focus its Apply button (or the search box) so focus is not lost.
+(function () {
+  var pending = false;
+  window.focusAfterDelete = function () { pending = true; };
+  document.addEventListener("htmx:afterSettle", function (e) {
+    var elt = (e.detail && e.detail.elt) || e.target;
+    if (!pending || !elt || elt.id !== "changes-banner") return;
+    pending = false;
+    var el = document.getElementById("apply-changes") || document.getElementById("q");
+    if (el) el.focus();
+  });
+})();

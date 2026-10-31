@@ -16,66 +16,72 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */ -}}
 {{define "status"}}<div id="status" class="grid gap-4 md:grid-cols-2" hx-get="/partials/status" hx-trigger="every 5s [!document.body.classList.contains('confirming')]" hx-swap="outerHTML">
-  <section class="rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:p-6" aria-labelledby="es-title">
-    <h2 id="es-title" class="text-sm font-medium uppercase tracking-wider text-zinc-400">Status</h2>
-    <div class="mt-4 flex items-center gap-3">
+  <section class="panel" aria-labelledby="es-title">
+    {{$info := "info:EmulationStation"}}{{if eq .State.Kind "game"}}{{$info = "info:Now playing"}}{{end}}{{template "panel-head" (panelHead "01" "Status" "id:es-title" $info)}}
+    <div class="p-5">
+    <div class="flex items-center gap-3">
       {{if eq .State.Kind "game"}}
-        <span class="h-3 w-3 rounded-full bg-red-500 shadow-[0_0_12px] shadow-red-500/60"></span>
+        <span class="h-3 w-3 flex-none rounded-full bg-accent shadow-[0_0_12px_var(--color-accent)]" aria-hidden="true"></span>
         <div class="min-w-0">
-          <p class="text-lg font-semibold">Game running</p>
-          <p class="truncate text-sm text-zinc-300" title="{{.ROMName}}">{{.ROMName}}</p>
-          {{if .SystemName}}<p class="text-xs text-zinc-500">{{.SystemName}}</p>{{end}}
+          <p class="font-display text-[28px] leading-none tracking-[0.02em]">Game running</p>
+          <p class="mt-1 truncate text-sm text-fg" title="{{.ROMName}}">{{.ROMName}}</p>
+          {{if .SystemName}}<p class="label-mono mt-1">{{.SystemName}}</p>{{end}}
         </div>
       {{else if eq .State.Kind "es"}}
-        <span class="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_12px] shadow-emerald-400/50"></span>
-        <p class="text-lg font-semibold">EmulationStation is running</p>
+        <span class="h-3 w-3 flex-none rounded-full bg-ok shadow-[0_0_12px_var(--color-ok)]" aria-hidden="true"></span>
+        <p class="font-display text-[28px] leading-none tracking-[0.02em]">EmulationStation is running</p>
       {{else if eq .State.Kind "stopped"}}
-        <span class="h-3 w-3 rounded-full bg-zinc-500"></span>
-        <p class="text-lg font-semibold">EmulationStation stopped</p>
+        <span class="h-3 w-3 flex-none rounded-full bg-dim" aria-hidden="true"></span>
+        <p class="font-display text-[28px] leading-none tracking-[0.02em]">EmulationStation stopped</p>
       {{else if eq .State.Kind "off"}}
-        <span class="h-3 w-3 rounded-full bg-zinc-600"></span>
+        <span class="h-3 w-3 flex-none rounded-full bg-line-strong" aria-hidden="true"></span>
         <div class="min-w-0">
-          <p class="text-lg font-semibold">EmulationStation is off</p>
-          <p class="text-sm text-zinc-400">Autostart is off. Start it on the device screen.</p>
+          <p class="font-display text-[28px] leading-none tracking-[0.02em]">EmulationStation is off</p>
+          <p class="mt-1 text-sm text-muted">Autostart is off. Start it on the device screen.</p>
         </div>
       {{else}}
-        <span class="h-3 w-3 rounded-full bg-amber-400"></span>
-        <p class="text-lg font-semibold">Status unknown</p>
+        <span class="h-3 w-3 flex-none rounded-full bg-warn" aria-hidden="true"></span>
+        <p class="font-display text-[28px] leading-none tracking-[0.02em]">Status unknown</p>
       {{end}}
     </div>
     {{if ne .State.Kind "off"}}
     <div class="mt-6 flex flex-wrap gap-3">
       {{if eq .State.Kind "game"}}
       <form method="post" action="/game/stop" hx-post="/game/stop" hx-target="#status" hx-swap="outerHTML" hx-confirm="The running game will be stopped. Unsaved progress will be lost.">
-        <button class="rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Stop game</button>
+        <button class="btn btn-danger">{{icon "x"}}Stop game</button>
       </form>
       {{end}}
       <form method="post" action="/es/restart" hx-post="/es/restart" hx-target="#status" hx-swap="outerHTML" hx-confirm="EmulationStation is restarting.">
-        <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Restart ES</button>
+        <button class="btn">{{icon "refresh-cw"}}Restart ES</button>
       </form>
       {{if eq .State.Kind "stopped"}}
       <form method="post" action="/es/start" hx-post="/es/start" hx-target="#status" hx-swap="outerHTML">
-        <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Start ES</button>
+        <button class="btn btn-primary">{{icon "play"}}Start ES</button>
       </form>
       {{else}}
       <form method="post" action="/es/stop" hx-post="/es/stop" hx-target="#status" hx-swap="outerHTML" hx-confirm="EmulationStation will be stopped and stays off until you start it again.">
-        <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Stop ES</button>
+        <button class="btn">{{icon "power"}}Stop ES</button>
       </form>
       {{end}}
     </div>
     {{end}}
+    </div>
   </section>
 
-  <section class="rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:p-6" aria-labelledby="dev-title">
-    <h2 id="dev-title" class="text-sm font-medium uppercase tracking-wider text-zinc-400">Device</h2>
-    <dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
-      <dt class="text-zinc-400">Hostname</dt><dd class="text-right font-medium">{{if .Info.Hostname}}{{.Info.Hostname}}{{else}}–{{end}}</dd>
-      <dt class="text-zinc-400">CPU temperature</dt><dd class="text-right font-medium">{{if .Info.HasTemp}}{{printf "%.1f" .Info.TempC}} °C{{else}}–{{end}}</dd>
-      {{with .Throttle}}{{if .Known}}<dt class="text-zinc-400">Throttle</dt><dd class="text-right font-medium {{if .Now}}text-amber-300{{end}}">{{if .NowHeat}}Too hot: the CPU is slowed down now.{{else if .NowPower}}Power is too low: the CPU is slowed down now. Use a stronger power supply.{{else}}Not throttled.{{end}}</dd>{{end}}{{end}}
-      <dt class="text-zinc-400">Load</dt><dd class="text-right font-medium">{{printf "%.2f" .Info.Load1}}</dd>
-      <dt class="text-zinc-400">RAM</dt><dd class="text-right font-medium">{{if .Info.MemTotal}}{{bytes (sub .Info.MemTotal .Info.MemAvail)}} / {{bytes .Info.MemTotal}}{{else}}–{{end}}</dd>
-      <dt class="text-zinc-400">Free storage</dt><dd class="text-right font-medium">{{if .Info.DiskTotal}}{{bytes .Info.DiskFree}} of {{bytes .Info.DiskTotal}}{{else}}–{{end}}</dd>
-      <dt class="text-zinc-400">IP addresses</dt><dd class="text-right font-medium">{{if .Info.IPs}}{{range .Info.IPs}}<span class="block">{{.}}</span>{{end}}{{else}}–{{end}}</dd>
+  <section class="panel" aria-labelledby="dev-title">
+    {{template "panel-head" (panelHead "02" "Device" "id:dev-title" (print "info:" .Info.Hostname))}}
+    <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 p-5 text-sm">
+      <dt class="label-mono self-center">Hostname</dt><dd class="text-right font-mono text-[13px]">{{if .Info.Hostname}}{{.Info.Hostname}}{{else}}–{{end}}</dd>
+      <dt class="label-mono self-center">CPU temperature</dt><dd class="text-right font-mono text-[13px]">{{if .Info.HasTemp}}{{printf "%.1f" .Info.TempC}} °C{{else}}–{{end}}</dd>
+      {{with .Throttle}}{{if .Known}}<dt class="label-mono self-center">Throttle</dt><dd class="text-right text-[13px] {{if .Now}}text-warn{{end}}">{{if .NowHeat}}Too hot: the CPU is slowed down now.{{else if .NowPower}}Power is too low: the CPU is slowed down now. Use a stronger power supply.{{else}}Not throttled.{{end}}</dd>{{end}}{{end}}
+      <dt class="label-mono self-center">Load</dt><dd class="text-right font-mono text-[13px]">{{printf "%.2f" .Info.Load1}}</dd>
+      <dt class="label-mono self-center">RAM</dt>
+      <dd class="text-right font-mono text-[13px]">{{if .Info.MemTotal}}{{bytes (sub .Info.MemTotal .Info.MemAvail)}} / {{bytes .Info.MemTotal}}
+        <div class="bar mt-2" role="progressbar" aria-label="RAM used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{pct (sub .Info.MemTotal .Info.MemAvail) .Info.MemTotal}}"><span style="width:{{pct (sub .Info.MemTotal .Info.MemAvail) .Info.MemTotal}}%"></span></div>{{else}}–{{end}}</dd>
+      <dt class="label-mono self-center">Free storage</dt>
+      <dd class="text-right font-mono text-[13px]">{{if .Info.DiskTotal}}{{bytes .Info.DiskFree}} of {{bytes .Info.DiskTotal}}
+        <div class="bar mt-2" role="progressbar" aria-label="Storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{pct (sub .Info.DiskTotal .Info.DiskFree) .Info.DiskTotal}}"><span style="width:{{pct (sub .Info.DiskTotal .Info.DiskFree) .Info.DiskTotal}}%"></span></div>{{else}}–{{end}}</dd>
+      <dt class="label-mono self-center">IP addresses</dt><dd class="text-right font-mono text-[13px]">{{if .Info.IPs}}{{range .Info.IPs}}<span class="block">{{.}}</span>{{end}}{{else}}–{{end}}</dd>
     </dl>
   </section>
 </div>{{end}}

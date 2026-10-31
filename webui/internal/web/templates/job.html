@@ -17,25 +17,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */ -}}
 {{define "content"}}{{with .Data}}
 <div x-data="jobView($el.dataset)" data-id="{{.Job.ID}}" data-status="{{.Job.Status}}" data-progress="{{.Job.Progress}}" data-err="{{.Job.Err}}" data-log="{{.LogText}}" data-link="{{.Job.Link}}" class="space-y-5">
-  <section class="rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:p-6" aria-live="polite">
-    <div class="flex items-center justify-between gap-3">
-      <p class="text-sm font-medium" x-text="statusText"></p>
-      <p class="text-sm tabular-nums text-zinc-400" x-text="Math.round(progress * 100) + ' %'"></p>
+  <section class="panel p-5 md:p-6" aria-live="polite">
+    <div class="flex items-end justify-between gap-3">
+      <p class="font-display text-[56px] leading-none tracking-[0.02em] tabular-nums" x-text="Math.round(progress * 100) + ' %'"></p>
+      <p class="label-mono pb-1" x-text="statusText"></p>
     </div>
-    <div class="mt-3 h-2.5 overflow-hidden rounded-full bg-zinc-800" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(progress * 100)">
-      <div class="h-full rounded-full transition-all duration-300" :class="status === 'failed' || status === 'aborted' ? 'bg-red-500' : 'bg-emerald-400'" :style="`width:${progress * 100}%`"></div>
+    <div class="bar mt-4" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(progress * 100)">
+      <div class="transition-all duration-300{{if not (or (eq .Job.Status "failed") (eq .Job.Status "aborted"))}} is-ok{{end}}" :class="{ 'is-ok': status !== 'failed' && status !== 'aborted' }" :style="`width:${progress * 100}%`"></div>
     </div>
-    <p class="mt-3 text-sm text-red-400" x-show="err" style="display:none" x-text="err"></p>
+    <p class="banner banner-danger mt-4" x-show="err" style="display:none" x-text="err"></p>
   </section>
   <section>
-    <h2 class="mb-2 text-sm font-medium uppercase tracking-wider text-zinc-400">Log</h2>
-    <pre x-ref="log" class="max-h-96 overflow-auto whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-300" x-text="log.length ? log.join('\n') : 'No output yet.'"></pre>
+    <h2 class="label-mono mb-2">Log</h2>
+    <pre x-ref="log" class="max-h-96 overflow-auto whitespace-pre-wrap border border-line bg-surface p-4 font-mono text-[12px] leading-relaxed text-muted" x-text="log.length ? log.join('\n') : 'No output yet.'"></pre>
   </section>
-  <div x-show="link" {{if not .Job.Link}}style="display:none"{{end}} class="flex gap-3">
-    <a href="{{.Job.Link}}" :href="link" class="rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Review files</a>
-  </div>
-  <div x-show="finished" style="display:none" class="flex gap-3">
-    <a href="/games" class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Go to games</a>
+  <div class="flex flex-wrap gap-3">
+    <a x-show="link" {{if not .Job.Link}}style="display:none"{{end}} href="{{.Job.Link}}" :href="link" class="btn btn-primary">{{icon "arrow-up-right"}}Review files</a>
+    <a x-show="finished" style="display:none" href="/games" class="btn">Go to games</a>
   </div>
 </div>
 {{end}}{{end}}

@@ -16,43 +16,45 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */ -}}
 {{define "bt_list"}}{{if not .Available}}
-<div class="rounded-xl border border-dashed border-zinc-700 p-6 text-sm text-zinc-400">Bluetooth is not available: no Bluetooth adapter found.</div>
+<div class="empty">{{icon "bluetooth"}}<p>Bluetooth is not available: no Bluetooth adapter found.</p></div>
 {{else}}
 <div x-data="btLive()" @bt-scan.window="listen()" class="space-y-4">
   <div class="flex flex-wrap items-center gap-3">
-    <form method="post" action="/bluetooth/scan" hx-post="/bluetooth/scan" hx-swap="none"><button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Scan for devices</button></form>
-    <span x-show="scanning" style="display:none" class="text-sm text-zinc-400" aria-live="polite">Scanning …</span>
+    <form method="post" action="/bluetooth/scan" hx-post="/bluetooth/scan" hx-swap="none"><button class="btn">{{icon "bluetooth"}}Scan for devices</button></form>
+    <span x-show="scanning" style="display:none" class="label-mono" aria-live="polite">Scanning …</span>
   </div>
-  <details class="rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-300">
-    <summary class="cursor-pointer font-medium">How to put the controller in pairing mode</summary>
-    <ul class="mt-3 list-disc space-y-2 pl-5">
-      <li><strong>Xbox:</strong> Hold the pairing button on top of the controller until the Xbox logo blinks fast.</li>
-      <li><strong>PlayStation:</strong> Hold PS + Share (DS4) or PS + Create (DualSense) until the light bar blinks.</li>
-      <li><strong>8BitDo:</strong> Hold Start + Y (Switch mode) or Start + X (X-Input), then press the Pair button for 3 s.</li>
+  <details class="border border-line text-sm text-muted">
+    <summary class="label-mono cursor-pointer px-4 py-3 hover:text-fg">How to put the controller in pairing mode</summary>
+    <div class="border-t border-line px-4 py-3">
+    <ul class="list-disc space-y-2 pl-5">
+      <li><strong class="text-fg">Xbox:</strong> Hold the pairing button on top of the controller until the Xbox logo blinks fast.</li>
+      <li><strong class="text-fg">PlayStation:</strong> Hold PS + Share (DS4) or PS + Create (DualSense) until the light bar blinks.</li>
+      <li><strong class="text-fg">8BitDo:</strong> Hold Start + Y (Switch mode) or Start + X (X-Input), then press the Pair button for 3 s.</li>
     </ul>
-    <p class="mt-3 text-xs text-amber-300">During scanning and pairing the device accepts pairing requests without a PIN.</p>
+    <p class="mt-3 text-xs text-warn">During scanning and pairing the device accepts pairing requests without a PIN.</p>
+    </div>
   </details>
   <div id="bt-list" hx-get="/partials/bluetooth" hx-trigger="bt-updated from:body" hx-swap="innerHTML" x-ref="list">{{template "bt_devices" .}}</div>
 </div>
 {{end}}{{end}}
 
-{{define "bt_devices"}}{{if .Error}}<div role="alert" class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">The device list could not be read.</div>
+{{define "bt_devices"}}{{if .Error}}<div role="alert" class="banner banner-warn">{{icon "triangle-alert"}}<span>The device list could not be read.</span></div>
 {{else if .Devices}}
-<ul class="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+<ul class="list border border-line">
   {{range .Devices}}
-  <li class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+  <li class="row flex-wrap gap-x-4 gap-y-2">
     <div class="min-w-0 flex-1 basis-56">
-      <p class="truncate text-sm font-medium">{{if .Name}}{{.Name}}{{else}}Unknown device{{end}}</p>
-      <p class="truncate font-mono text-xs text-zinc-500">{{.Address}}</p>
+      <p class="truncate text-[13.5px] font-semibold">{{if .Name}}{{.Name}}{{else}}Unknown device{{end}}</p>
+      <p class="truncate font-mono text-[11px] text-dim">{{.Address}}</p>
     </div>
-    {{if .Connected}}<span class="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-300">connected</span>
-    {{else if .Paired}}<span class="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-medium text-zinc-300">paired</span>{{end}}
+    {{if .Connected}}<span class="badge badge-ok">connected</span>
+    {{else if .Paired}}<span class="badge">paired</span>{{end}}
     <div class="flex flex-wrap gap-2">
-      {{if not .Connected}}<form method="post" action="/bluetooth/{{.Address}}/pair" hx-post="/bluetooth/{{.Address}}/pair" hx-swap="none"><button class="rounded-lg bg-red-500 px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">{{if .Paired}}Connect{{else}}Pair{{end}}</button></form>{{end}}
-      {{if .Connected}}<form method="post" action="/bluetooth/{{.Address}}/disconnect" hx-post="/bluetooth/{{.Address}}/disconnect" hx-swap="none"><button class="rounded-lg bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Disconnect</button></form>{{end}}
-      {{if .Paired}}<form method="post" action="/bluetooth/{{.Address}}/remove" hx-post="/bluetooth/{{.Address}}/remove" hx-swap="none" hx-confirm="The device will be forgotten and must be paired again."><button class="rounded-lg bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Remove</button></form>{{end}}
+      {{if not .Connected}}<form method="post" action="/bluetooth/{{.Address}}/pair" hx-post="/bluetooth/{{.Address}}/pair" hx-swap="none"><button class="btn btn-sm btn-primary">{{if .Paired}}Connect{{else}}Pair{{end}}</button></form>{{end}}
+      {{if .Connected}}<form method="post" action="/bluetooth/{{.Address}}/disconnect" hx-post="/bluetooth/{{.Address}}/disconnect" hx-swap="none"><button class="btn btn-sm">Disconnect</button></form>{{end}}
+      {{if .Paired}}<form method="post" action="/bluetooth/{{.Address}}/remove" hx-post="/bluetooth/{{.Address}}/remove" hx-swap="none" hx-confirm="The device will be forgotten and must be paired again."><button class="btn btn-sm btn-danger">Remove</button></form>{{end}}
     </div>
   </li>
   {{end}}
 </ul>
-{{else}}<div class="rounded-xl border border-dashed border-zinc-700 p-6 text-center text-sm text-zinc-400">No devices known. Start a scan.</div>{{end}}{{end}}
+{{else}}<div class="empty">{{icon "bluetooth"}}<p>No devices known. Start a scan.</p></div>{{end}}{{end}}

@@ -522,6 +522,24 @@ c_web_ok() {
     return 1
   }
 }
+# c_web_about : GET /about answers 200 and shows the no-warranty text
+c_web_about() {
+  local body
+  body=$(curl -sS -w '\n%{http_code}' --max-time 10 --cacert "$CA" \
+    --resolve "$BOOT_HOST:$WEB_PORT:127.0.0.1" -u "$WEB_USER:$WEB_PASSWORD" \
+    "https://$BOOT_HOST:$WEB_PORT/about" 2>/dev/null || true)
+  [ "${body##*$'\n'}" = 200 ] || {
+    say "  GET /about did not answer 200"
+    return 1
+  }
+  case "$body" in
+    *"ABSOLUTELY NO WARRANTY"*) ;;
+    *)
+      say "  /about does not contain the warranty text"
+      return 1
+      ;;
+  esac
+}
 c_web_wrong() { [ "$(web_code "$WEB_USER" "wrong-password")" = 401 ]; }
 c_ssh_ok() { [ "$(gssh 'echo ok' 2>/dev/null)" = ok ]; }
 c_ssh_root() { ! gssh_as root "$ASKPASS_OK" true >/dev/null 2>&1; }
@@ -688,6 +706,7 @@ run_smoke() {
   say "Web UI answers after $waited s."
 
   check "1. HTTPS $GUEST_WEB with valid auth -> 200 (certificate checked with the CA)" c_web_ok
+  check "1. GET /about -> 200 with the warranty text" c_web_about
   check "2. Wrong web password -> 401" c_web_wrong
   check "3. SSH login on $GUEST_SSH works" c_ssh_ok
   check "3. SSH login as root is rejected" c_ssh_root

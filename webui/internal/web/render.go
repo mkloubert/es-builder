@@ -24,11 +24,14 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"emulationstation/webui/internal/gamelist"
@@ -37,21 +40,36 @@ import (
 //go:embed static templates
 var assets embed.FS
 
-// navItem is one entry of the sidebar / tab bar.
+// navItem is one entry of the sidebar and the phone menu.
 type navItem struct {
 	Key, Label, Href, Icon string
+	N                      int // number shown next to the entry (1 = "01")
 	Active                 bool
 }
 
 var navItems = []navItem{
-	{Key: "dashboard", Label: "Dashboard", Href: "/", Icon: "M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"},
-	{Key: "games", Label: "Games", Href: "/games", Icon: "M6 12h4m-2-2v4m6-1h.01m2-2h.01M7 7h10a4 4 0 014 4v2a4 4 0 01-4 4l-2-2H9l-2 2a4 4 0 01-4-4v-2a4 4 0 014-4z"},
-	{Key: "upload", Label: "Upload", Href: "/upload", Icon: "M12 16V4m0 0l-4 4m4-4l4 4M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"},
-	{Key: "usb", Label: "USB", Href: "/usb", Icon: "M12 3v13m0 0a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM12 7l-3 3v2M12 9l3 2v2M8 12h2v2H8zM14 13h2v2h-2z"},
-	{Key: "bios", Label: "BIOS", Href: "/bios", Icon: "M9 3v2m6-2v2M9 19v2m6-2v2M3 9h2m-2 6h2m14-6h2m-2 6h2M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2zm2 4h6v6H9z"},
-	{Key: "controllers", Label: "Controller", Href: "/controllers", Icon: "M12 3a2 2 0 100 4 2 2 0 000-4zm0 4v6M5 15h14a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3a1 1 0 011-1z"},
-	{Key: "system", Label: "System", Href: "/system", Icon: "M4 5h16v5H4zM4 14h16v5H4zM8 7.5h.01M8 16.5h.01"},
-	{Key: "settings", Label: "Settings", Href: "/settings", Icon: "M4 6h10m4 0h2M4 12h4m4 0h8M4 18h12m4 0h0M16 4v4M10 10v4M18 16v4"},
+	{Key: "dashboard", Label: "Dashboard", Href: "/", Icon: "layout-dashboard"},
+	{Key: "games", Label: "Games", Href: "/games", Icon: "gamepad-2"},
+	{Key: "upload", Label: "Upload", Href: "/upload", Icon: "upload"},
+	{Key: "usb", Label: "USB", Href: "/usb", Icon: "usb"},
+	{Key: "bios", Label: "BIOS", Href: "/bios", Icon: "cpu"},
+	{Key: "controllers", Label: "Controllers", Href: "/controllers", Icon: "joystick"},
+	{Key: "system", Label: "System", Href: "/system", Icon: "server"},
+	{Key: "settings", Label: "Settings", Href: "/settings", Icon: "settings"},
+	{Key: "about", Label: "About & licenses", Href: "/about", Icon: "info"},
+}
+
+// navKeyFor <page> : returns the key of the nav entry that is active on a page ("" = none).
+func navKeyFor(page string) string {
+	switch page {
+	case "games_system":
+		return "games"
+	case "upload_review":
+		return "upload"
+	case "job":
+		return ""
+	}
+	return page
 }
 
 // certWarnDays is the remaining validity below which the layout warns.
@@ -61,11 +79,17 @@ const certWarnDays = 30
 type Page struct {
 	Title        string
 	Nav          []navItem
+	Section      string   // key of the active nav entry; "" = none
+	SectionHref  string   // link of the section in the crumb on a sub page; "" = no link
+	Crumb        []string // breadcrumb parts, for example ["02", "GAMES", "SUPER NINTENDO"]
 	CertWarning  bool
 	CertDaysLeft int
 	SourceURL    string // validated http(s) source link for the footer; "" = none
 	Data         any
 }
+
+// IsLastCrumb <i> : reports whether i is the index of the last crumb part (the current page).
+func (p Page) IsLastCrumb(i int) bool { return i == len(p.Crumb)-1 }
 
 // safeSourceURL returns u if it is an absolute http(s) URL, else "".
 func safeSourceURL(u string) string {
@@ -78,6 +102,36 @@ func safeSourceURL(u string) string {
 
 type confirmBtn struct{ Label, Action, Message, Target string }
 
+// panelHeadData is the data of the "panel-head" partial.
+type panelHeadData struct {
+	Num, Title, ID, Info string
+	Badge, BadgeKind     string // BadgeKind is "", "ok", "warn" or "danger"
+}
+
+// panelHead <num> <title> [key:value ...] : builds the data for the "panel-head" partial.
+// Keys: "id" (id of the h2), "info" (mono text on the right), "badge", "badge-ok",
+// "badge-warn", "badge-danger" (a badge on the right). An unknown key is an error.
+func panelHead(num, title string, opts ...string) (panelHeadData, error) {
+	d := panelHeadData{Num: num, Title: title}
+	for _, o := range opts {
+		k, v, ok := strings.Cut(o, ":")
+		if !ok {
+			return d, fmt.Errorf("panelHead: bad option %q", o)
+		}
+		switch k {
+		case "id":
+			d.ID = v
+		case "info":
+			d.Info = v
+		case "badge", "badge-ok", "badge-warn", "badge-danger":
+			d.Badge, d.BadgeKind = v, strings.TrimPrefix(strings.TrimPrefix(k, "badge"), "-")
+		default:
+			return d, fmt.Errorf("panelHead: unknown option %q", k)
+		}
+	}
+	return d, nil
+}
+
 var funcs = template.FuncMap{
 	"sub": func(a, b uint64) uint64 {
 		if b > a {
@@ -85,11 +139,52 @@ var funcs = template.FuncMap{
 		}
 		return a - b
 	},
+	"inc":            func(i int) int { return i + 1 },
 	"bytes":          humanBytes,
+	"icon":           icon,
+	"pct":            pct,
 	"gamelistBroken": gamelist.BrokenMessage,
+	"panelHead":      panelHead,
 	"confirmBtn": func(label, action, msg, target string) confirmBtn {
 		return confirmBtn{label, action, msg, target}
 	},
+}
+
+// iconNames is the set of symbol ids in the built-in static/icons.svg, read once.
+var iconNames = sync.OnceValue(func() map[string]bool {
+	set := map[string]bool{}
+	b, err := assets.ReadFile("static/icons.svg")
+	if err != nil {
+		return set
+	}
+	for _, m := range symbolID.FindAllSubmatch(b, -1) {
+		set[string(m[1])] = true
+	}
+	return set
+})
+
+var symbolID = regexp.MustCompile(`<symbol[^>]*\sid="([a-z0-9-]+)"`)
+
+// icon <name> : returns the SVG tag for a sprite symbol. An unknown name is an error.
+func icon(name string) (template.HTML, error) {
+	if !iconNames()[name] {
+		return "", fmt.Errorf("unknown icon %q", name)
+	}
+	return template.HTML(`<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#` + name + `"></use></svg>`), nil
+}
+
+// pct <used> <total> : percent of used in total, 0 when total is 0, at most 100.
+func pct(used, total uint64) int {
+	if total == 0 {
+		return 0
+	}
+	if used >= total {
+		return 100
+	}
+	if used > math.MaxUint64/100 {
+		return int(used / (total / 100))
+	}
+	return int(used * 100 / total)
 }
 
 func humanBytes(n uint64) string {
@@ -221,10 +316,20 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request, name, title string
 		http.Error(w, "Template missing", http.StatusInternalServerError)
 		return
 	}
-	p := Page{Title: title, Data: data, Nav: make([]navItem, len(navItems))}
+	p := Page{Title: title, Data: data, Section: navKeyFor(name), Nav: make([]navItem, len(navItems))}
 	copy(p.Nav, navItems)
 	for i := range p.Nav {
-		p.Nav[i].Active = p.Nav[i].Key == name
+		n := &p.Nav[i]
+		n.N, n.Active = i+1, n.Key == p.Section
+		if n.Active {
+			p.Crumb = []string{fmt.Sprintf("%02d", n.N), strings.ToUpper(n.Label)}
+			if name != n.Key {
+				p.SectionHref = n.Href
+			}
+		}
+	}
+	if p.Crumb == nil || p.SectionHref != "" {
+		p.Crumb = append(p.Crumb, strings.ToUpper(title))
 	}
 	if cfg := s.d.Config(); cfg != nil {
 		p.SourceURL = safeSourceURL(cfg.SourceURL)

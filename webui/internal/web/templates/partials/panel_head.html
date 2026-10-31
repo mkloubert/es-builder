@@ -1,0 +1,22 @@
+{{- /*
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/ -}}
+{{/* The head of a numbered panel. Use it on every page:
+{{template "panel-head" (panelHead "01" "Title" "id:my-title" "info:Right text")}}
+In a <summary class="panel-head">, use "panel-head-inner" with the same data. */}}
+{{define "panel-head"}}<div class="panel-head">{{template "panel-head-inner" .}}</div>{{end}}
+{{define "panel-head-inner"}}<span class="chip-num">{{.Num}}</span><h2{{if .ID}} id="{{.ID}}"{{end}} class="label-mono">{{.Title}}</h2>{{if .Info}}<span class="panel-info">{{.Info}}</span>{{end}}{{if .Badge}}<span class="badge{{if .BadgeKind}} badge-{{.BadgeKind}}{{end}}">{{.Badge}}</span>{{end}}{{end}}

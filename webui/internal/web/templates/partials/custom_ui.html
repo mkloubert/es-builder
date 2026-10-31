@@ -15,13 +15,16 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */ -}}
-{{define "custom_ui"}}<div id="custom-ui" class="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-{{if .Err}}<div role="alert" class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+{{define "custom_ui"}}<div id="custom-ui" class="panel" aria-labelledby="ui-title">
+{{template "panel-head" (panelHead "01" "Web UI" "id:ui-title" "info:Custom templates")}}
+<div class="space-y-4 p-5">
+{{if .Err}}<div role="alert" class="banner banner-warn">{{icon "triangle-alert"}}<div class="min-w-0 flex-1">
   <p>The custom templates have an error. The built-in web UI is in use.</p>
   <p class="mt-2 break-words font-mono text-xs">{{.Err}}</p>
+</div></div>
+{{else if .Dir}}<p class="text-sm text-fg">{{.Files}} custom files in use from <span class="font-mono">{{.Dir}}</span>.</p>
+{{else}}<p class="text-sm text-muted">Custom web UI is off.</p>{{end}}
+<p class="text-xs text-dim">Templates are loaded at start and with this button. Static files are read on every request.</p>
+<form method="post" action="/system/ui-reload" hx-post="/system/ui-reload" hx-target="#custom-ui" hx-swap="outerHTML"><button class="btn">{{icon "refresh-cw"}}Reload web UI</button></form>
 </div>
-{{else if .Dir}}<p class="text-sm text-zinc-300">{{.Files}} custom files in use from <span class="font-mono">{{.Dir}}</span>.</p>
-{{else}}<p class="text-sm text-zinc-400">Custom web UI is off.</p>{{end}}
-<p class="text-xs text-zinc-500">Templates are loaded at start and with this button. Static files are read on every request.</p>
-<form method="post" action="/system/ui-reload" hx-post="/system/ui-reload" hx-target="#custom-ui" hx-swap="outerHTML"><button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Reload web UI</button></form>
 </div>{{end}}

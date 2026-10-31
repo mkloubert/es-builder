@@ -15,29 +15,30 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */ -}}
+{{define "subtitle"}}Change the admin login and the ScreenScraper account.{{end}}
 {{define "content"}}{{with .Data}}
-<div class="grid gap-5 lg:grid-cols-2">
-  <section class="rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
-    <h2 class="text-sm font-medium uppercase tracking-wider text-zinc-400">Admin access</h2>
-    <form method="post" action="/settings/password" hx-post="/settings/password" hx-swap="none" class="mt-4 space-y-4" autocomplete="off">
-      <label class="block text-sm text-zinc-300">User name
-        <input name="user" value="{{.WebUser}}" required autocomplete="username" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm placeholder:text-zinc-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"></label>
-      <label class="block text-sm text-zinc-300">New password
-        <input type="password" name="password" required minlength="4" autocomplete="new-password" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm placeholder:text-zinc-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"></label>
-      <label class="block text-sm text-zinc-300">Repeat password
-        <input type="password" name="password2" required minlength="4" autocomplete="new-password" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm placeholder:text-zinc-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"></label>
-      <p class="text-xs text-zinc-500">At least 4 characters. The new credentials apply at once. The browser then asks for them again.</p>
-      <button class="rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Change credentials</button>
+<div class="grid items-start gap-5 lg:grid-cols-2">
+  <section class="panel" aria-labelledby="set-admin-title">
+    {{template "panel-head" (panelHead "01" "Admin access" "id:set-admin-title" "info:Web UI")}}
+    <form method="post" action="/settings/password" hx-post="/settings/password" hx-swap="none" class="space-y-4 p-5" autocomplete="off">
+      <label class="block"><span class="label-mono">User name</span>
+        <input name="user" value="{{.WebUser}}" required autocomplete="username" class="input mt-1 block w-full"></label>
+      <label class="block"><span class="label-mono">New password</span>
+        <input type="password" name="password" required minlength="4" autocomplete="new-password" class="input mt-1 block w-full"></label>
+      <label class="block"><span class="label-mono">Repeat password</span>
+        <input type="password" name="password2" required minlength="4" autocomplete="new-password" class="input mt-1 block w-full"></label>
+      <p class="text-xs text-dim">At least 4 characters. The new credentials apply at once. The browser then asks for them again.</p>
+      <button class="btn btn-primary">Change credentials</button>
     </form>
   </section>
-  <section class="rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
-    <h2 class="text-sm font-medium uppercase tracking-wider text-zinc-400">ScreenScraper</h2>
-    <form method="post" action="/settings/screenscraper" hx-post="/settings/screenscraper" hx-swap="none" class="mt-4 space-y-4" autocomplete="off">
-      <label class="block text-sm text-zinc-300">User name
-        <input name="user" value="{{.SSUser}}" autocomplete="off" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm placeholder:text-zinc-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"></label>
-      <label class="block text-sm text-zinc-300">Password
-        <input type="password" name="pass" autocomplete="new-password" placeholder="{{if .SSPassSet}}Saved – leave empty to keep it{{else}}Not set yet{{end}}" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm placeholder:text-zinc-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"></label>
-      <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Save</button>
+  <section class="panel" aria-labelledby="set-ss-title">
+    {{template "panel-head" (panelHead "02" "ScreenScraper" "id:set-ss-title" "info:Scraping")}}
+    <form method="post" action="/settings/screenscraper" hx-post="/settings/screenscraper" hx-swap="none" class="space-y-4 p-5" autocomplete="off">
+      <label class="block"><span class="label-mono">User name</span>
+        <input name="user" value="{{.SSUser}}" autocomplete="off" class="input mt-1 block w-full"></label>
+      <label class="block"><span class="label-mono">Password</span>
+        <input type="password" name="pass" autocomplete="new-password" placeholder="{{if .SSPassSet}}Saved – leave empty to keep it{{else}}Not set yet{{end}}" class="input mt-1 block w-full"></label>
+      <button class="btn">Save</button>
     </form>
   </section>
 </div>

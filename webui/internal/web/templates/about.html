@@ -1,0 +1,80 @@
+{{- /*
+EmuStation Builder
+Copyright (C) 2026  Marcel Joachim Kloubert
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/ -}}
+{{define "subtitle"}}Legal notices and third-party licenses.{{end}}
+{{define "content"}}{{with .Data}}
+<div class="space-y-6">
+  <section class="panel" aria-labelledby="about-app">
+    {{template "panel-head" (panelHead "01" "EmuStation Builder" "id:about-app")}}
+    <div class="space-y-3 p-4 text-[13px]">
+      <p class="text-fg">Ready-to-boot EmulationStation images with a web UI to manage games, BIOS files and controllers.</p>
+      <p class="font-mono text-[12px] text-muted">Copyright (C) 2026  Marcel Joachim Kloubert</p>
+      <p class="text-muted">This program comes with ABSOLUTELY NO WARRANTY. It is free software, and you are welcome to redistribute it under the terms of the GNU Affero General Public License, version 3 or later.</p>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="about-source">
+    {{template "panel-head" (panelHead "02" "Source code" "id:about-source")}}
+    <div class="p-4 text-[13px]">
+      {{if $.SourceURL}}<a href="{{$.SourceURL}}" target="_blank" rel="noopener" class="font-mono text-accent-fg underline underline-offset-4 break-all">{{$.SourceURL}}</a>
+      {{else}}<p class="text-muted">No source code link is set. Set SOURCE_URL in build.conf.</p>{{end}}
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="about-license">
+    {{template "panel-head" (panelHead "03" "License text" "id:about-license")}}
+    <details class="p-4">
+      <summary class="label-mono cursor-pointer">GNU Affero General Public License, version 3</summary>
+      <pre class="mt-3 max-h-96 overflow-auto whitespace-pre-wrap border border-line bg-surface p-3 font-mono text-[11px] leading-relaxed text-muted">{{.License}}</pre>
+    </details>
+  </section>
+
+  <section class="panel" aria-labelledby="about-third">
+    {{template "panel-head" (panelHead "04" "Third-party software" "id:about-third")}}
+    <div>
+      <table class="block w-full border-collapse text-left text-[13px] md:table">
+        <thead class="hidden md:table-header-group">
+          <tr class="label-mono">
+            <th scope="col" class="px-4 py-2 font-medium">Name</th>
+            <th scope="col" class="px-4 py-2 font-medium">Version</th>
+            <th scope="col" class="px-4 py-2 font-medium">License</th>
+            <th scope="col" class="px-4 py-2 font-medium">Link</th>
+          </tr>
+        </thead>
+        {{range .Components}}
+        <tbody class="block border-t border-line md:table-row-group">
+          <tr class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-3 pb-1 md:table-row md:p-0">
+            <th scope="row" class="basis-full font-normal text-fg md:px-4 md:pt-3 md:pb-1">{{.Name}}</th>
+            <td class="font-mono text-[11px] text-dim tabular-nums md:px-4 md:pt-3 md:pb-1">{{.Version}}</td>
+            <td class="md:px-4 md:pt-3 md:pb-1"><span class="badge">{{.SPDX}}</span></td>
+            <td class="min-w-0 basis-full md:px-4 md:pt-3 md:pb-1"><a href="{{.URL}}" target="_blank" rel="noopener" class="font-mono text-[11px] text-accent-fg underline underline-offset-4 break-all">{{.URL}}</a></td>
+          </tr>
+          <tr class="block md:table-row">
+            <td colspan="4" class="block px-4 pb-3 md:table-cell">
+              <details>
+                <summary class="label-mono cursor-pointer hover:text-fg">License text<span class="sr-only"> of {{.Name}}</span></summary>
+                <pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap border border-line bg-surface p-3 font-mono text-[11px] leading-relaxed text-muted">{{.Text}}</pre>
+              </details>
+            </td>
+          </tr>
+        </tbody>
+        {{end}}
+      </table>
+    </div>
+  </section>
+</div>
+{{end}}{{end}}

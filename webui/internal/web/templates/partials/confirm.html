@@ -19,5 +19,5 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 with hx-confirm="Text" opens it (see static/app.js); this partial renders a
 ready-made confirm button: {{template "confirm" (confirmBtn "Label" "/path" "Text")}}. */}}
 {{define "confirm"}}<form method="post" action="{{.Action}}" hx-post="{{.Action}}" hx-confirm="{{.Message}}"{{if .Target}} hx-target="{{.Target}}"{{end}}>
-  <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">{{.Label}}</button>
+  <button class="btn">{{.Label}}</button>
 </form>{{end}}

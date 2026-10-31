@@ -15,26 +15,29 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */ -}}
+{{define "subtitle"}}Pick a system to see its games.{{end}}
 {{define "content"}}{{with .Data}}
 {{template "changes_banner" .Changes}}
 {{if .Notice}}{{template "flash" .Notice}}<div class="mb-4"></div>{{end}}
-<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-  <p class="text-sm text-zinc-400">{{if .All}}All systems{{else}}Systems with games{{end}}</p>
-  {{if .All}}<a href="/games" class="rounded-lg px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Only systems with games</a>
-  {{else}}<a href="/games?all=1" class="rounded-lg px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Show all systems</a>{{end}}
-</div>
+<nav class="mb-5 inline-flex border border-line-strong font-mono text-[10px] uppercase tracking-[0.12em]" aria-label="Systems filter">
+  <a href="/games"{{if not .All}} aria-current="true"{{end}} class="px-4 py-2.5 {{if not .All}}bg-fg text-bg{{else}}text-muted hover:text-fg{{end}}">With games</a>
+  <a href="/games?all=1"{{if .All}} aria-current="true"{{end}} class="border-l border-line-strong px-4 py-2.5 {{if .All}}bg-fg text-bg{{else}}text-muted hover:text-fg{{end}}">All systems</a>
+</nav>
 {{if .Cards}}
-<ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-  {{range .Cards}}
-  <li><a href="/games/{{.Name}}" class="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 transition hover:border-red-500/50 hover:bg-zinc-800/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
-    <span class="min-w-0 truncate font-medium">{{.FullName}}</span>
-    <span class="shrink-0 rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-medium text-zinc-300">{{.Count}}</span>
+<ul class="grid pl-px pt-px sm:grid-cols-2 lg:grid-cols-3">
+  {{range $i, $c := .Cards}}
+  <li class="-ml-px -mt-px border border-line"><a href="/games/{{$c.Name}}" class="flex h-full items-center gap-3 p-4 transition-colors hover:bg-surface">
+    <span class="chip-num mr-0">{{printf "%02d" (inc $i)}}</span>
+    <span class="min-w-0 flex-1 truncate font-medium" title="{{$c.FullName}}">{{$c.FullName}}</span>
+    <span class="shrink-0 font-mono text-xs text-muted">{{$c.Count}}</span>
   </a></li>
   {{end}}
 </ul>
 {{else}}
-<div class="rounded-xl border border-dashed border-zinc-700 p-8 text-center text-sm text-zinc-400">
-  No games yet. <a href="/upload" class="text-red-400 hover:underline">Upload ROMs</a>
+<div class="empty">
+  {{icon "gamepad-2"}}
+  <p>No games yet.</p>
+  <a href="/upload" class="btn btn-primary">{{icon "upload"}}Upload ROMs</a>
 </div>
 {{end}}
 {{end}}{{end}}

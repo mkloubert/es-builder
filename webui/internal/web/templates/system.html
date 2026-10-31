@@ -15,51 +15,61 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */ -}}
+{{define "subtitle"}}Power, updates, logs and web UI tools.{{end}}
 {{define "content"}}{{with .Data}}
 <div x-data="{ tab: 'logs' }">
-  <div class="mb-5 flex gap-1 overflow-x-auto border-b border-zinc-800" role="tablist">
-    <button type="button" role="tab" @click="tab = 'logs'" :aria-selected="tab === 'logs'" :class="tab === 'logs' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Logs</button>
-    <button type="button" role="tab" @click="tab = 'bans'" :aria-selected="tab === 'bans'" :class="tab === 'bans' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Bans</button>
-    <button type="button" role="tab" @click="tab = 'updates'" :aria-selected="tab === 'updates'" :class="tab === 'updates' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Updates</button>
-    <button type="button" role="tab" @click="tab = 'power'" :aria-selected="tab === 'power'" :class="tab === 'power' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Power</button>
-{{if .CPU.Supported}}    <button type="button" role="tab" @click="tab = 'cpu'" :aria-selected="tab === 'cpu'" :class="tab === 'cpu' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">CPU</button>{{end}}
-    <button type="button" role="tab" @click="tab = 'webui'" :aria-selected="tab === 'webui'" :class="tab === 'webui' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Web UI</button>
+  <div class="tabs mb-5" role="tablist" aria-label="System">
+    <button type="button" role="tab" @click="tab = 'power'" :aria-selected="tab === 'power'">Power</button>
+    <button type="button" role="tab" @click="tab = 'updates'" :aria-selected="tab === 'updates'">Updates</button>
+{{if .CPU.Supported}}    <button type="button" role="tab" @click="tab = 'cpu'" :aria-selected="tab === 'cpu'">CPU</button>
+{{end}}    <button type="button" role="tab" @click="tab = 'logs'" :aria-selected="tab === 'logs'">Logs</button>
+    <button type="button" role="tab" @click="tab = 'bans'" :aria-selected="tab === 'bans'">Bans</button>
+    <button type="button" role="tab" @click="tab = 'webui'" :aria-selected="tab === 'webui'">Web UI</button>
   </div>
 
-  <section x-show="tab === 'logs'" role="tabpanel" aria-label="Logs">
-    <form hx-get="/system/log" hx-target="#syslog" hx-trigger="change, load" hx-swap="innerHTML" class="mb-3">
-      <label class="block max-w-xs text-sm text-zinc-300">Source
-        <select name="unit" class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm placeholder:text-zinc-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-          {{range .Units}}<option value="{{.Key}}">{{.Label}}</option>{{end}}
-        </select>
-      </label>
-    </form>
-    <div id="syslog"><p class="text-sm text-zinc-500">Loading …</p></div>
-  </section>
-
-  <section x-show="tab === 'bans'" role="tabpanel" aria-label="Bans" style="display:none">
-    {{template "bans" .Bans}}
-  </section>
-
-  <section x-show="tab === 'updates'" role="tabpanel" aria-label="Updates" style="display:none" class="space-y-4">
-    <p class="text-sm text-zinc-400">The output is shown live in the job view.</p>
-    <div class="flex flex-wrap gap-3">
-      <form method="post" action="/system/update" hx-post="/system/update" hx-swap="none"><button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Update package lists</button></form>
-      <form method="post" action="/system/upgrade" hx-post="/system/upgrade" hx-swap="none" hx-confirm="All installed packages will be upgraded. This can take a long time."><button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Upgrade packages</button></form>
+  <section x-show="tab === 'power'" role="tabpanel" aria-label="Power" style="display:none" class="panel">
+    {{template "panel-head" (panelHead "01" "Power" "info:Restart or shut down")}}
+    <div class="flex flex-wrap gap-3 p-5">
+      <form method="post" action="/system/reboot" hx-post="/system/reboot" hx-swap="none" hx-confirm="The system will restart. A running game will be stopped."><button class="btn">{{icon "rotate-ccw"}}Restart</button></form>
+      <form method="post" action="/system/poweroff" hx-post="/system/poweroff" hx-swap="none" hx-confirm="The system will shut down and must be switched on again by hand."><button class="btn btn-danger btn-primary">{{icon "power"}}Shut down</button></form>
     </div>
   </section>
 
-  <section x-show="tab === 'webui'" role="tabpanel" aria-label="Web UI" style="display:none">
-    {{template "custom_ui" .UI}}
+  <section x-show="tab === 'updates'" role="tabpanel" aria-label="Updates" style="display:none" class="panel">
+    {{template "panel-head" (panelHead "01" "Updates" "info:Debian packages")}}
+    <div class="space-y-4 p-5">
+      <p class="text-sm text-muted">The output is shown live in the job view.</p>
+      <div class="flex flex-wrap gap-3">
+        <form method="post" action="/system/update" hx-post="/system/update" hx-swap="none"><button class="btn">{{icon "refresh-cw"}}Update package lists</button></form>
+        <form method="post" action="/system/upgrade" hx-post="/system/upgrade" hx-swap="none" hx-confirm="All installed packages will be upgraded. This can take a long time."><button class="btn">{{icon "download"}}Upgrade packages</button></form>
+      </div>
+    </div>
   </section>
 
   {{if .CPU.Supported}}<section x-show="tab === 'cpu'" role="tabpanel" aria-label="CPU" style="display:none">
     {{template "cpu" .CPU}}
   </section>{{end}}
 
-  <section x-show="tab === 'power'" role="tabpanel" aria-label="Power" style="display:none" class="flex flex-wrap gap-3">
-    <form method="post" action="/system/reboot" hx-post="/system/reboot" hx-swap="none" hx-confirm="The system will restart. A running game will be stopped."><button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Restart</button></form>
-    <form method="post" action="/system/poweroff" hx-post="/system/poweroff" hx-swap="none" hx-confirm="The system will shut down and must be switched on again by hand."><button class="rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300">Shut down</button></form>
+  <section x-show="tab === 'logs'" role="tabpanel" aria-label="Logs" class="panel">
+    {{template "panel-head" (panelHead "01" "Logs" "info:Journal")}}
+    <div class="space-y-4 p-5">
+      <form hx-get="/system/log" hx-target="#syslog" hx-trigger="change, load" hx-swap="innerHTML">
+        <label class="block max-w-xs"><span class="label-mono">Source</span>
+          <select name="unit" class="select mt-1 block w-full">
+            {{range .Units}}<option value="{{.Key}}">{{.Label}}</option>{{end}}
+          </select>
+        </label>
+      </form>
+      <div id="syslog"><p class="text-sm text-dim">Loading …</p></div>
+    </div>
+  </section>
+
+  <section x-show="tab === 'bans'" role="tabpanel" aria-label="Bans" style="display:none">
+    {{template "bans" .Bans}}
+  </section>
+
+  <section x-show="tab === 'webui'" role="tabpanel" aria-label="Web UI" style="display:none">
+    {{template "custom_ui" .UI}}
   </section>
 </div>
 {{end}}{{end}}

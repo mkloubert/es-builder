@@ -19,3 +19,9 @@ secrets/
 webui/internal/web/static/app.css
 build.conf
 .DS_Store
+
+# Draft of the next CLAUDE.md (the owner merges it by hand)
+CLAUDE-new.md
+
+# Brainstorm mockups (local only)
+.superpowers/

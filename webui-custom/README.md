@@ -21,4 +21,9 @@ webui-custom/
 - If your templates have an error, the web UI uses the built-in templates and the System page
   shows the error.
 - A new image replaces the folder on the device with the files from here.
+- Templates from before the redesign must be adapted to the new markup and CSS classes.
+  `navItem.Icon` now holds a Lucide icon name, so a copied custom layout must use
+  `{{icon .Icon}}`. The `icon` function knows only the icons of the built-in sprite
+  (`webui/assets/icons.txt`); add more with `webui/scripts/icons.sh`. The layout blocks
+  `subtitle` and `actions` are optional.
 - See "Custom web UI" in the main `README.md`.

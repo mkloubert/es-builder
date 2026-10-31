@@ -28,13 +28,14 @@ func footerOf(t *testing.T, e *env) string {
 		t.Fatalf("GET /system = %d", w.Code)
 	}
 	body := w.Body.String()
-	i := strings.Index(body, "<footer")
+	// The legal line of the page footer carries id="legal".
+	i := strings.Index(body, `id="legal"`)
 	if i < 0 {
-		t.Fatalf("no footer in page")
+		t.Fatalf("no legal line in page")
 	}
 	j := strings.Index(body[i:], "</footer>")
 	if j < 0 {
-		t.Fatalf("unterminated footer")
+		t.Fatalf("unterminated legal line")
 	}
 	return body[i : i+j]
 }
