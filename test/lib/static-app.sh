@@ -220,6 +220,9 @@ checks_units() {
   check "web.conf: UI_DIR=/home/emulationstation/webui-custom" ui_dir_set
   check "emulationstation-cpu.service: oneshot priv cpu-apply" cpu_unit_ok
   check "c64music: .sid system with vsid (when VICE is installed)" c64music_ok
+  check "shell tools: mc is in the image" in_image mc
+  check "shell tools: ifconfig (net-tools) is in the image" in_image ifconfig
+  check "profile.d: sbin folders in PATH for login shells" test -s "$R/etc/profile.d/20-emulationstation-sbin.sh"
 }
 
 checks_firstboot() {

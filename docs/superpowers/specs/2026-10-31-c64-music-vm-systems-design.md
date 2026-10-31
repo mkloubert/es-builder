@@ -1,4 +1,4 @@
-# EmuStation Builder – C64 in the VM, Dreamcast in the VM, C64 music (.sid) – Design
+# EmuStation Builder – C64, Dreamcast and PS1 in the VM, C64 music (.sid), shell tools – Design
 
 License: AGPL-3.0-or-later, see LICENSE
 
@@ -11,23 +11,27 @@ the VM images). Where the two disagree, this spec wins.
 
 The owner uploads `.d64` and `.sid` files of C64 games in the web UI. Today the VM image has no
 C64 system, so `.d64` is not known there, and no image knows `.sid` (RetroPie's C64 system does
-not list it). The owner also wants Dreamcast in the VM.
+not list it). The owner also wants Dreamcast and PlayStation (PS1) in the VM, and the shell
+tools `mc` and `net-tools` (`ifconfig`) in every image.
 
-1. The VM images (`vm-amd64`, `vm-arm64`) install the RetroPie modules `vice` (C64) and
-   `lr-flycast` (Dreamcast). The web UI then knows `.d64`, `.prg`, `.t64`, `.cdi`, `.gdi`, … in
-   the VM.
+1. The VM images (`vm-amd64`, `vm-arm64`) install the RetroPie modules `vice` (C64),
+   `lr-flycast` (Dreamcast) and `lr-pcsx-rearmed` (PS1). The web UI then knows `.d64`, `.prg`,
+   `.t64`, `.cdi`, `.gdi`, `.cue`, `.chd`, `.pbp`, … in the VM.
 2. Every image with VICE has a new ES system `c64music` ("Commodore 64 Music") for `.sid` files.
    An upload of a `.sid` file goes to `~/RetroPie/roms/c64music/`. In ES, the file starts with
    VICE's SID player `vsid`.
 3. Scraping is not offered for `c64music`: the web UI says so and does not start a job.
 4. A failed `vice` build does not stop the build. Then there is no `c64music` system (the module
    is already listed in the build report).
+5. Every image (rpi4 and VM) has the Debian packages `mc` and `net-tools`. In a login shell
+   (SSH, tty) the user `emulationstation` can type `ifconfig` without the full path.
 
 ## 2. Decisions
 
 | Topic | Decision | Reason |
 |---|---|---|
-| VM modules | add `vice` and `lr-flycast` to `provision/vm/modules.list` | owner's wish; RetroPie builds both from source for x86 and aarch64 |
+| VM modules | add `vice`, `lr-flycast` and `lr-pcsx-rearmed` to `provision/vm/modules.list` | owner's wish; RetroPie builds them from source for x86 and aarch64; same PS1 core as rpi4 |
+| Shell tools | `mc` and `net-tools` in a new app script `provision/common/app-12-tools.sh` | CLAUDE.md: new packages go into the app layer, so the rpi4 base cache stays valid |
 | `.sid` place | own ES system `c64music`, not more extensions for `c64` | `c64` starts every file with `x64`, and `x64` cannot start a `.sid` (VICE 3.7.1 `autostart.c` has no PSID support); a per-file emulator choice would be needed for every `.sid` |
 | Player | `/opt/retropie/emulators/vice/bin/vice.sh vsid %ROM%` | `vsid` is part of VICE 3.7.1 (`bin_PROGRAMS` in `src/Makefile.am`), `vice.sh` is RetroPie's start script with zip support |
 | Theme | `<theme>c64</theme>` | ES uses the C64 art of the active theme; no theme files are copied (EpicNoir stays an aggregate) |
@@ -51,7 +55,7 @@ testing, playing is not a goal (README) — cost if wrong: slow games in the VM.
 
 ### 3.1 VM emulator list (`provision/vm/modules.list`)
 
-Append `vice` and `lr-flycast`. This changes the base cache key of both VM targets (rpi4 is not
+Append `vice`, `lr-flycast` and `lr-pcsx-rearmed`. This changes the base cache key of both VM targets (rpi4 is not
 affected). A failure is handled like every other module (report line, build goes on).
 
 ### 3.2 C64 music system (`provision/common/app-25-c64music.sh`)
@@ -84,6 +88,24 @@ Runs in the chroot as root, on every target. Idempotent. Test overrides: `PROVIS
    ```
    The result must be valid XML (`xmlstarlet val -w`), else `die`.
 
+### 3.2a Shell tools (`provision/common/app-12-tools.sh`)
+
+Runs in the chroot as root, on every target. For each package of `mc net-tools` that `dpkg -s`
+does not know: one `apt-get update`, then one `apt-get install -y --no-install-recommends` with
+the missing packages (stdin `/dev/null`, `DEBIAN_FRONTEND=noninteractive`). When all are there,
+apt is not called. A failed install stops the build.
+
+### 3.2b sbin in PATH (`overlay/etc/profile.d/20-emulationstation-sbin.sh`)
+
+Debian 12 gives normal users no sbin folder in `PATH`, so `ifconfig` (in `/usr/sbin`) is not
+found. The new file (root:root, 0644, read by every login shell) appends `/usr/local/sbin`,
+`/usr/sbin` and `/sbin` to the end of `PATH`, each only when it is missing.
+
+Ruling: append, never prepend — a folder at the end cannot hide a program of the same name in
+an earlier folder; the sbin folders are root-owned and no right changes (root tools still need
+`sudo`); Debian 13 does the same for all users — cost if wrong: none for security, a user tool
+named like a sbin tool keeps winning.
+
 ### 3.3 Web UI (`webui/internal/scrape`, `webui/internal/web`)
 
 - `scrape.Supported(system string) bool`: false for `c64music`, true for all other systems.
@@ -101,6 +123,11 @@ Runs in the chroot as root, on every target. Idempotent. Test overrides: `PROVIS
   system at the end; missing `es_systems.cfg` → error.
 - Go: table test for `scrape.Supported`; handler test for the 400; upload test that a
   `c64music` file starts no scrape job.
+- bats `test/bats/tools.bats`: apt is called only for missing packages; nothing is called when
+  all are there.
+- `test/lib/static-app.sh`: `mc` and `ifconfig` are in the image; the profile.d file exists.
+- bats `test/bats/tools.bats`: the profile.d file appends missing sbin folders at the end,
+  adds nothing twice, and keeps the order of the old `PATH`.
 - `test/lib/static-app.sh`: when `vsid` is in the image, `es_systems.cfg` has `c64music` with
   `.sid` and the `emulators.cfg` default is `vice-vsid`.
 - `docs/hardware-checklist.md`: a `.sid` plays in ES on the Pi, and you can leave the player.

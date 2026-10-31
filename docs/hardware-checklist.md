@@ -224,8 +224,9 @@ once with the menu in ES and once in a game.
 - [ ] EmulationStation shows on the virtio-gpu display (software rendering; the KMS build on a VM
   is untested). Games are not a goal of the VM.
 - [ ] Exactly one kernel is installed (`ls /lib/modules`).
-- [ ] The VM has the systems "Commodore 64", "Commodore 64 Music" and "Dreamcast" (when `vice` and
-  `lr-flycast` are not in the build report). The web UI accepts a `.d64`, a `.sid` and a `.cdi`.
+- [ ] The VM has the systems "Commodore 64", "Commodore 64 Music", "Dreamcast" and "PlayStation"
+  (when `vice`, `lr-flycast` and `lr-pcsx-rearmed` are not in the build report). The web UI
+  accepts a `.d64`, a `.sid`, a `.cdi` and a `.cue`. `mc` and `ifconfig` work in an SSH session.
   Starting a game is optional (software rendering, Dreamcast is slow).
 
 ## 9. Builder on the host

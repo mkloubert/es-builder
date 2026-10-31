@@ -58,7 +58,7 @@ setup() {
   mkdir -p "$R/lib/modules/6.12.0-test/kernel" "$R/lib/modules/6.12.0-test/have" "$R/usr/bin" "$BATS_TEST_TMPDIR/bin"
   local m t
   for m in vfat exfat ntfs3; do : >"$R/lib/modules/6.12.0-test/have/$m"; done
-  for t in lsblk jq findmnt mountpoint; do
+  for t in lsblk jq findmnt mountpoint mc ifconfig; do
     printf '#!/bin/sh\n' >"$R/usr/bin/$t"
     chmod 755 "$R/usr/bin/$t"
   done

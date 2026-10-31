@@ -258,7 +258,7 @@ func notice(r *http.Request) string {
 
 func (s *Server) handleGames(w http.ResponseWriter, r *http.Request) {
 	cfg := s.d.Config()
-	v := gamesView{All: r.URL.Query().Get("all") == "1", Notice: notice(r), Changes: s.changesView(), Scrape: scrape.Supported(sys.Name)}
+	v := gamesView{All: r.URL.Query().Get("all") == "1", Notice: notice(r), Changes: s.changesView()}
 	for _, sys := range s.systemList() {
 		files, err := listROMs(cfg, sys)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -297,7 +297,7 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		s.logf("list %s: %v", sys.Name, err)
 	}
-	v := systemView{System: sys, Q: strings.TrimSpace(r.URL.Query().Get("q")), Notice: notice(r), Changes: s.changesView()}
+	v := systemView{System: sys, Q: strings.TrimSpace(r.URL.Query().Get("q")), Notice: notice(r), Changes: s.changesView(), Scrape: scrape.Supported(sys.Name)}
 	glPath := gamelist.PathFor(cfg.Paths, sys.Name)
 	gl, err := gamelist.Read(glPath)
 	if err != nil {

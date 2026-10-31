@@ -9,13 +9,15 @@ web page to manage the system.
 - `rpi4`: image for the Raspberry Pi 4 (2 GB). It boots straight into EmulationStation.
 - `vm-amd64` and `vm-arm64`: UEFI images for QEMU, UTM or VirtualBox. They are for testing the web
   UI, SSH and the firewall. Playing games in the VM is not a goal. The VM has only a few systems:
-  NES, SNES, Game Boy, C64 (`vice`) and Dreamcast (`lr-flycast`).
+  NES, SNES, Game Boy, C64 (`vice`), Dreamcast (`lr-flycast`) and PlayStation (`lr-pcsx-rearmed`).
 
 What you get:
 
 - EmulationStation with the EpicNoir theme, and emulators for many systems (NES to Dreamcast, arcade, home computers, DOS).
 - A web UI at `https://<device>:11944` to upload ROMs, rename and scrape games, set up controllers,
   pair Bluetooth pads, restart or stop EmulationStation, and update the system.
+- Shell tools for SSH sessions: `mc` (Midnight Commander) and `net-tools` (`ifconfig`, `netstat`).
+  The sbin folders are at the end of `PATH`, so `ifconfig` works without the full path.
 - SSH on port `11911`. A firewall that opens only 11911 and 11944. fail2ban bans an address for
   one hour after 5 failed logins.
 

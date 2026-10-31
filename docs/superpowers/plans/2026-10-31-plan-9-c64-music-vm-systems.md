@@ -17,7 +17,10 @@
 
 ## Tasks
 
-- [ ] 1. `provision/vm/modules.list`: append `vice` and `lr-flycast`.
+- [ ] 1. `provision/vm/modules.list`: append `vice`, `lr-flycast` and `lr-pcsx-rearmed`.
+- [ ] 1a. `provision/common/app-12-tools.sh` (spec 3.2a) + `test/bats/tools.bats` + static check
+  for `mc` and `ifconfig`.
+- [ ] 1b. `overlay/etc/profile.d/20-emulationstation-sbin.sh` (spec 3.2b) + tests.
 - [ ] 2. `provision/common/app-25-c64music.sh` (spec 3.2), with functions `write_emulators`,
   `add_system` and `main`; only `main` runs when the file is executed.
 - [ ] 3. `test/bats/c64music.bats` (spec 3.4) with a fixture `test/fixtures/es_systems/`.
