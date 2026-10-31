@@ -104,6 +104,18 @@ cpu_unit_ok() {
     grep -qx 'ExecStart=/usr/local/lib/emulationstation/priv cpu-apply' "$f" &&
     ! grep -qE 'Listen|Socket|Port' "$f"
 }
+# c64music_ok : when VICE's vsid is in the image, es_systems.cfg has the c64music system for .sid
+# and runcommand starts vsid by default (spec 2026-10-31-c64-music-vm-systems-design.md 3.2).
+# Without vsid there is nothing to check (a failed vice build is in the report).
+c64music_ok() {
+  local cfg=$R/etc/emulationstation/es_systems.cfg emu=$R/opt/retropie/configs/c64music/emulators.cfg
+  [ -x "$R/opt/retropie/emulators/vice/bin/vsid" ] || return 0
+  grep -q '<name>c64music</name>' "$cfg" 2>/dev/null &&
+    grep -q '<extension>.sid .SID</extension>' "$cfg" &&
+    grep -qx 'default = "vice-vsid"' "$emu" 2>/dev/null &&
+    grep -qx 'vice-vsid = "/opt/retropie/emulators/vice/bin/vice.sh vsid %ROM%"' "$emu" &&
+    [ -d "$R/home/emulationstation/RetroPie/roms/c64music" ]
+}
 ui_dir_set() { grep -qx 'UI_DIR=/home/emulationstation/webui-custom' "$R/etc/emulationstation-web/web.conf" 2>/dev/null; }
 machine_id_unset() { [ "$(cat "$R/etc/machine-id" 2>/dev/null)" = uninitialized ]; }
 no_host_keys() { ! compgen -G "$R/etc/ssh/ssh_host_*" >/dev/null; }
@@ -207,6 +219,7 @@ checks_units() {
   check "webui-custom folder: emulationstation, no symlinks" webui_custom_ok
   check "web.conf: UI_DIR=/home/emulationstation/webui-custom" ui_dir_set
   check "emulationstation-cpu.service: oneshot priv cpu-apply" cpu_unit_ok
+  check "c64music: .sid system with vsid (when VICE is installed)" c64music_ok
 }
 
 checks_firstboot() {

@@ -35,6 +35,7 @@ import (
 	"emulationstation/webui/internal/es"
 	"emulationstation/webui/internal/jobs"
 	"emulationstation/webui/internal/roms"
+	"emulationstation/webui/internal/scrape"
 	"emulationstation/webui/internal/systems"
 )
 
@@ -522,11 +523,15 @@ func (s *Server) handleCommit(w http.ResponseWriter, r *http.Request) {
 	if scrapeAfter && s.d.Jobs != nil {
 		by := map[string][]string{}
 		for _, c := range committed {
-			by[c.System] = append(by[c.System], strings.TrimPrefix(c.RelPath, "./"))
+			if scrape.Supported(c.System) {
+				by[c.System] = append(by[c.System], strings.TrimPrefix(c.RelPath, "./"))
+			}
 		}
-		job := s.submitScrape(cfg, "Scrape: new games", by)
-		redirect(w, r, "/jobs/"+job.ID)
-		return
+		if len(by) > 0 {
+			job := s.submitScrape(cfg, "Scrape: new games", by)
+			redirect(w, r, "/jobs/"+job.ID)
+			return
+		}
 	}
 	loc := fmt.Sprintf("/games?added=%d", len(committed))
 	first := committed[0].System

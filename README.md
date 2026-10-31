@@ -8,7 +8,8 @@ web page to manage the system.
 
 - `rpi4`: image for the Raspberry Pi 4 (2 GB). It boots straight into EmulationStation.
 - `vm-amd64` and `vm-arm64`: UEFI images for QEMU, UTM or VirtualBox. They are for testing the web
-  UI, SSH and the firewall. Playing games in the VM is not a goal.
+  UI, SSH and the firewall. Playing games in the VM is not a goal. The VM has only a few systems:
+  NES, SNES, Game Boy, C64 (`vice`) and Dreamcast (`lr-flycast`).
 
 What you get:
 
@@ -152,6 +153,13 @@ xz -dc out/emulationstation-rpi4-<date>.img.xz | sudo dd of=/dev/sdX bs=4M conv=
 Put the card into the Pi 4, connect the network and a screen, and power on. On the first boot the
 root partition grows to fill the card, SSH host keys are made, and your boot file is read (see below).
 The first start takes a little longer.
+
+## C64 music (`.sid` files)
+
+`.sid` files are C64 music, not games. Every image with the C64 emulator VICE has an extra system
+"Commodore 64 Music" (`c64music`, folder `~/RetroPie/roms/c64music/`). Upload `.sid` files in
+the web UI like ROMs. In EmulationStation they start in VICE's SID player `vsid`. The web UI does
+not scrape this system, because ScreenScraper has no data for SID music.
 
 ## Use the VM images
 

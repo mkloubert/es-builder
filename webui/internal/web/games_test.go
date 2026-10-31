@@ -70,6 +70,7 @@ func newEnv(t *testing.T) *env {
 		{Name: "psx", FullName: "Sony PlayStation", Extensions: []string{".cue", ".bin", ".m3u"}},
 		{Name: "nes", FullName: "Nintendo NES", Extensions: []string{".nes"}},
 		{Name: "ports", FullName: "Ports", Extensions: []string{".sh"}},
+		{Name: "c64music", FullName: "Commodore 64 Music", Extensions: []string{".sid"}},
 	}
 	for _, s := range syss[:2] {
 		if err := os.MkdirAll(filepath.Join(cfg.Paths.Roms, s.Name), 0o755); err != nil {
@@ -603,6 +604,36 @@ func TestScrapeListsTheFolderOnce(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("folder listed %d times", calls)
+	}
+}
+
+func TestScrapeIsRefusedForC64Music(t *testing.T) {
+	e := newEnv(t)
+	e.write(t, "c64music/Tune.sid", "x")
+	w := e.do("POST", "/games/c64music/scrape", url.Values{"rel": {"Tune.sid"}})
+	if w.Code != http.StatusBadRequest || w.Header().Get("HX-Redirect") != "" {
+		t.Fatalf("scrape = %d %q", w.Code, w.Header().Get("HX-Redirect"))
+	}
+	if !strings.Contains(w.Header().Get("HX-Trigger")+w.Body.String(), "Scraping is not available for this system.") {
+		t.Fatalf("no message: %q %s", w.Header().Get("HX-Trigger"), w.Body)
+	}
+}
+
+func TestGamesPageHidesScrapeForC64Music(t *testing.T) {
+	e := newEnv(t)
+	e.write(t, "c64music/Tune.sid", "x")
+	e.write(t, "snes/Game.sfc", "x")
+	for _, tc := range []struct {
+		sys  string
+		want bool
+	}{{"c64music", false}, {"snes", true}} {
+		w := e.do("GET", "/games/"+tc.sys, nil)
+		if w.Code != 200 {
+			t.Fatalf("%s: status %d", tc.sys, w.Code)
+		}
+		if got := strings.Contains(w.Body.String(), "/games/"+tc.sys+"/scrape"); got != tc.want {
+			t.Errorf("%s: scrape form shown = %v, want %v", tc.sys, got, tc.want)
+		}
 	}
 }
 

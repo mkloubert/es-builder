@@ -120,6 +120,25 @@ shared_lines() {
   [[ $output == *"FAIL: autostart.sh: es-session (yes) or the off hint (no)"* ]]
 }
 
+@test "shared checks: c64music passes without vsid, with a full setup, and fails when broken" {
+  local line="c64music: .sid system with vsid (when VICE is installed)"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"PASS: $line"* ]]
+  mkdir -p "$R/opt/retropie/emulators/vice/bin" "$R/etc/emulationstation"
+  printf '#!/bin/sh\n' >"$R/opt/retropie/emulators/vice/bin/vsid"
+  chmod 755 "$R/opt/retropie/emulators/vice/bin/vsid"
+  cp "$ROOT/test/fixtures/es_systems/es_systems.cfg" "$R/etc/emulationstation/es_systems.cfg"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"FAIL: $line"* ]]
+  mkdir -p "$R/opt/retropie/configs/c64music" "$R/home/emulationstation/RetroPie/roms/c64music"
+  # shellcheck source=provision/common/app-25-c64music.sh
+  (. "$ROOT/provision/common/app-25-c64music.sh" &&
+    write_emulators "$R/opt/retropie/configs/c64music/emulators.cfg" &&
+    add_system "$R/etc/emulationstation/es_systems.cfg")
+  run shared_lines rpi4-static.sh
+  [[ $output == *"PASS: $line"* ]]
+}
+
 @test "shared checks: each broken item is reported" {
   sed -i 's/^Port 11911/Port 22/' "$R/etc/ssh/sshd_config.d/10-emulationstation.conf"
   sed -i 's/maxretry = 5/maxretry = 9/' "$R/etc/fail2ban/jail.d/emulationstation.conf"

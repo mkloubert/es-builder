@@ -138,6 +138,10 @@ warning.
 - [ ] Start one game per system group and quit it. ES comes back each time. Systems to try: NES,
   SNES, Game Boy, GBA, Mega Drive, PC Engine, arcade, PlayStation, Dreamcast, a computer system
   (C64 or Amiga), DOS, ScummVM. Expected: sound and picture, normal speed.
+- [ ] C64 music: upload a `.sid` file in the web UI. Expected: the review page offers
+  "Commodore 64 Music", the file lands in `~/RetroPie/roms/c64music/`, and the games page of this
+  system has no "Scrape" button. Start it in ES. Expected: VICE's `vsid` plays the tune, and you can
+  leave the player (F12 menu or the RetroPie hotkey) and get back to ES.
 - [ ] N64 and PSP: they depend on the game. Try one game of each. A slow game is not a bug (README).
 - [ ] Start a game from the web UI. Expected: the game runs on the TV and "stop game" in the web UI
   ends it and ES returns. (The game process group and `runcommand` on a real terminal were only
@@ -220,6 +224,9 @@ once with the menu in ES and once in a game.
 - [ ] EmulationStation shows on the virtio-gpu display (software rendering; the KMS build on a VM
   is untested). Games are not a goal of the VM.
 - [ ] Exactly one kernel is installed (`ls /lib/modules`).
+- [ ] The VM has the systems "Commodore 64", "Commodore 64 Music" and "Dreamcast" (when `vice` and
+  `lr-flycast` are not in the build report). The web UI accepts a `.d64`, a `.sid` and a `.cdi`.
+  Starting a game is optional (software rendering, Dreamcast is slow).
 
 ## 9. Builder on the host
 

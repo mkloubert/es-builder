@@ -171,6 +171,21 @@ func TestUploadCommitWithScrapeSubmitsJob(t *testing.T) {
 	}
 }
 
+func TestUploadCommitWithScrapeSkipsC64Music(t *testing.T) {
+	e := newEnv(t)
+	e.setState(t, "stopped\n")
+	_, resp := e.upload(t, "Tune.sid", strings.NewReader("x"))
+	id := resp.Uploads[0].ID
+	w := e.do("POST", "/upload/"+id+"/commit", url.Values{
+		"system|" + id + "|Tune.sid": {"c64music"}, "scrape": {"1"}})
+	if w.Code != 200 || !strings.HasPrefix(w.Header().Get("HX-Redirect"), "/games/c64music") {
+		t.Fatalf("status = %d redirect = %q: %s", w.Code, w.Header().Get("HX-Redirect"), w.Body)
+	}
+	if _, err := os.Stat(filepath.Join(e.roms, "c64music", "Tune.sid")); err != nil {
+		t.Fatalf("sid not committed: %v", err)
+	}
+}
+
 func TestUploadRejectsUnsafeAndSkipsNonFiles(t *testing.T) {
 	e := newEnv(t)
 	w, _ := e.upload(t, "../../evil.sfc", strings.NewReader("x"))

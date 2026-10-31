@@ -34,6 +34,17 @@ import (
 
 func autoName(rel, name string) bool { return name == "" || name == "Mario" }
 
+func TestSupported(t *testing.T) {
+	for _, tc := range []struct {
+		sys  string
+		want bool
+	}{{"snes", true}, {"c64", true}, {"dreamcast", true}, {"c64music", false}} {
+		if got := Supported(tc.sys); got != tc.want {
+			t.Errorf("Supported(%q) = %v, want %v", tc.sys, got, tc.want)
+		}
+	}
+}
+
 func TestGatherArgsWithoutAccount(t *testing.T) {
 	got := GatherArgs(&config.Config{}, "snes", []string{"a.sfc", "b.sfc"})
 	want := []string{"-p", "snes", "-s", "screenscraper", "--flags", "unattend", "a.sfc", "b.sfc"}

@@ -16,9 +16,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */ -}}
 {{define "subtitle"}}Search, start, rename, scrape or delete games.{{end}}
-{{define "actions"}}{{with .Data}}<form method="post" action="/games/{{.System.Name}}/scrape" hx-post="/games/{{.System.Name}}/scrape" hx-swap="none" hx-confirm="Scrape all games of this system? This can take a long time.">
+{{define "actions"}}{{with .Data}}{{if .Scrape}}<form method="post" action="/games/{{.System.Name}}/scrape" hx-post="/games/{{.System.Name}}/scrape" hx-swap="none" hx-confirm="Scrape all games of this system? This can take a long time.">
   <button class="btn btn-sm">{{icon "image"}}Scrape all</button>
-</form>{{end}}{{end}}
+</form>{{end}}{{end}}{{end}}
 {{define "content"}}{{with .Data}}
 {{template "changes_banner" .Changes}}
 {{if .Notice}}{{template "flash" .Notice}}<div class="mb-4"></div>{{end}}
@@ -64,8 +64,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <div x-ref="menu" x-show="menu" x-cloak style="display:none" role="menu" aria-label="Actions for {{.Display}}" class="menu absolute right-0 top-9"
             @keydown.arrow-down.prevent="go(1)" @keydown.arrow-up.prevent="go(-1)">
             <button type="button" role="menuitem" @click="rename()">{{icon "pencil"}}Rename</button>
-            <form method="post" action="/games/{{$.System.Name}}/scrape" hx-post="/games/{{$.System.Name}}/scrape" hx-swap="none"><input type="hidden" name="rel" value="{{.Rel}}">
-              <button role="menuitem" @click="close()">{{icon "image"}}Scrape</button></form>
+            {{if $.Scrape}}<form method="post" action="/games/{{$.System.Name}}/scrape" hx-post="/games/{{$.System.Name}}/scrape" hx-swap="none"><input type="hidden" name="rel" value="{{.Rel}}">
+              <button role="menuitem" @click="close()">{{icon "image"}}Scrape</button></form>{{end}}
             <form method="post" action="/games/{{$.System.Name}}/delete" hx-post="/games/{{$.System.Name}}/delete" hx-swap="none" @htmx:after-request="if ($event.detail.successful) focusAfterDelete()" hx-confirm="Queue “{{.Display}}” for deletion? It is only deleted when you click “Apply”."><input type="hidden" name="rel" value="{{.Rel}}">
               <button role="menuitem" class="btn-danger text-accent-fg" @click="close()">{{icon "trash-2"}}Delete …</button></form>
           </div>

@@ -68,6 +68,7 @@ type gamesView struct {
 	All     bool
 	Notice  string
 	Changes changesView
+	Scrape  bool // the system can be scraped
 }
 
 type romRow struct {
@@ -257,7 +258,7 @@ func notice(r *http.Request) string {
 
 func (s *Server) handleGames(w http.ResponseWriter, r *http.Request) {
 	cfg := s.d.Config()
-	v := gamesView{All: r.URL.Query().Get("all") == "1", Notice: notice(r), Changes: s.changesView()}
+	v := gamesView{All: r.URL.Query().Get("all") == "1", Notice: notice(r), Changes: s.changesView(), Scrape: scrape.Supported(sys.Name)}
 	for _, sys := range s.systemList() {
 		files, err := listROMs(cfg, sys)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -639,6 +640,10 @@ func (p scrapeStep) Logf(f string, a ...any) {
 func (s *Server) handleScrape(w http.ResponseWriter, r *http.Request) {
 	sys, ok := s.systemParam(w, r)
 	if !ok {
+		return
+	}
+	if !scrape.Supported(sys.Name) {
+		s.fail(w, r, http.StatusBadRequest, "Scraping is not available for this system.")
 		return
 	}
 	_ = r.ParseForm()

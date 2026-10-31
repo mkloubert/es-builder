@@ -307,8 +307,8 @@ EOF2
   grep -q 'CFG_TARGET_ARCH=arm64 CFG_RETROPIE_SETUP_REF=r1 CFG_RETROPIE_PLATFORM=aarch64 CFG_XPADNEO_REF=x1 CFG_RETROPIE_CPU_FLAGS=-march=armv8-a CFG_RETROPIE_KMS=1 ' "$CALLS"
 }
 
-@test "vm modules.list: exactly lr-fceumm lr-snes9x lr-gambatte" {
-  [ "$(grep -Ev '^(#|$)' "$ROOT/provision/vm/modules.list" | tr '\n' ' ')" = "lr-fceumm lr-snes9x lr-gambatte " ]
+@test "vm modules.list: exactly lr-fceumm lr-snes9x lr-gambatte vice lr-flycast" {
+  [ "$(grep -Ev '^(#|$)' "$ROOT/provision/vm/modules.list" | tr '\n' ' ')" = "lr-fceumm lr-snes9x lr-gambatte vice lr-flycast " ]
 }
 
 @test "Provision scripts (vm): shebang, set -euo pipefail, bash -n" {

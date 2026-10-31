@@ -41,6 +41,13 @@ var Binary = "/opt/retropie/supplementary/skyscraper/Skyscraper"
 // mergeFields are copied from the scraped gamelist; name is handled separately.
 var mergeFields = []string{"desc", "image", "thumbnail", "marquee", "video", "releasedate", "developer", "publisher", "genre", "players", "rating"}
 
+// unsupported are systems that ScreenScraper has no data for (spec
+// 2026-10-31-c64-music-vm-systems-design.md 3.3).
+var unsupported = map[string]bool{"c64music": true}
+
+// Supported reports whether the web UI may scrape the system.
+func Supported(system string) bool { return !unsupported[system] }
+
 // GatherArgs are the arguments of the scraping (cache filling) pass.
 func GatherArgs(cfg *config.Config, system string, roms []string) []string {
 	args := []string{"-p", system, "-s", "screenscraper"}
