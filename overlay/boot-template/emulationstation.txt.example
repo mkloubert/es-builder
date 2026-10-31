@@ -47,7 +47,7 @@
 #WIFI_PASSWORD=my wifi password
 
 # Wi-Fi country, two capital letters (for example DE, US, GB). Raspberry Pi only.
-# On the Raspberry Pi this matters: Raspberry Pi OS blocks Wi-Fi until a country is set.
+# It sets the Wi-Fi channels of your country. Without it, Wi-Fi uses fewer, safe channels.
 # Set it together with the Wi-Fi lines above. If it is missing, the country from the
 # build (WIFI_COUNTRY in build.conf) is used.
 #WIFI_COUNTRY=DE

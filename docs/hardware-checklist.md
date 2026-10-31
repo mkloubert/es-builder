@@ -80,6 +80,13 @@ editor, so the file has CRLF line ends. Set host name, Wi-Fi, time zone, keyboar
 
 ## 4. Network, SSH and firewall
 
+- [ ] Wi-Fi is on at the first boot (Pi). With `WIFI_SSID` in `build.conf`: the Pi connects
+  without a cable. `rfkill list` shows `Soft blocked: no` for the wlan device, and
+  `nmcli radio wifi` prints `enabled`. Note if the wlan state file in `/var/lib/systemd/rfkill/`
+  has a name other than `platform-fe300000.mmcnr:wlan`.
+- [ ] `sudo nmcli radio wifi off`, reboot: Wi-Fi stays off (the first boot step runs only once).
+  Turn it on again with `sudo nmcli radio wifi on`.
+
 - [ ] From another computer: `nmap -p 1-65535 <device>` shows only 11911 and 11944 open.
   Ping works (IPv4 and IPv6).
 - [ ] On the device: `ss -tlnp` shows only 11911 and 11944 on non-loopback addresses.
@@ -225,7 +232,7 @@ once with the menu in ES and once in a game.
   is untested). Games are not a goal of the VM.
 - [ ] Exactly one kernel is installed (`ls /lib/modules`).
 - [ ] The VM has the systems "Commodore 64", "Commodore 64 Music", "Dreamcast" and "PlayStation"
-  (when `vice`, `lr-flycast` and `lr-pcsx-rearmed` are not in the build report). The web UI
+  (when `vice`, `flycast` and `lr-pcsx-rearmed` are not in the build report). The web UI
   accepts a `.d64`, a `.sid`, a `.cdi` and a `.cue`. `mc` and `ifconfig` work in an SSH session.
   Starting a game is optional (software rendering, Dreamcast is slow).
 

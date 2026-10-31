@@ -45,8 +45,8 @@ TLS_EXTRA_SANS=
 SOURCE_URL=https://github.com/mkloubert/es-builder
 
 # --- Wi-Fi (optional; empty = LAN/DHCP only) -----------------------------------
-# WIFI_COUNTRY: two capital letters. On the Raspberry Pi it is needed for Wi-Fi
-# (Raspberry Pi OS blocks Wi-Fi until a country is set).
+# WIFI_COUNTRY: two capital letters. On the Raspberry Pi it sets the Wi-Fi channels of your
+# country. Wi-Fi is on in any case; without a country it uses fewer, safe channels.
 WIFI_SSID=
 WIFI_PASSWORD=
 WIFI_COUNTRY=DE

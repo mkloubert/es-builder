@@ -142,6 +142,39 @@ nm() { echo "$R/etc/NetworkManager/system-connections/emulationstation-wifi.nmco
   run ! grep -q regdom "$R/boot/firmware/cmdline.txt"
 }
 
+@test "app-15 rpi4: Wi-Fi radio on without SSID and country (spec rpi-wifi-on 4.2)" {
+  rm "$R/var/lib/systemd/rfkill/platform-fe300000.mmcnr:wlan"
+  mkdir -p "$R/var/lib/NetworkManager"
+  printf '[main]\nNetworkingEnabled=true\nWirelessEnabled=false\n' >"$R/var/lib/NetworkManager/NetworkManager.state"
+  net_env WIFI_SSID= WIFI_PASSWORD= WIFI_COUNTRY=
+  run_net
+  [ "$status" -eq 0 ]
+  [[ $output == *"Wi-Fi radio on"* ]]
+  [ "$(cat "$R/var/lib/systemd/rfkill/platform-fe300000.mmcnr:wlan")" = 0 ]
+  [ "$(cat "$R/var/lib/systemd/rfkill/platform-3f300000.mmcnr:wlan")" = 0 ]
+  [ "$(cat "$R/var/lib/systemd/rfkill/platform-xyz:bluetooth")" = 1 ]
+  [ "$(cat "$R/var/lib/NetworkManager/NetworkManager.state")" = "$(printf '[main]\nNetworkingEnabled=true\nWirelessEnabled=true')" ]
+}
+
+@test "nmwifi_state_on: missing file, no line, no [main], other lines stay, idempotent" {
+  . "$ROOT/overlay/usr/local/lib/emulationstation/nmwifi.sh"
+  local f="$T/nm/NetworkManager.state"
+  nmwifi_state_on "$f"
+  [ "$(cat "$f")" = "$(printf '[main]\nWirelessEnabled=true')" ]
+  [ "$(stat -c %a "$f")" = 644 ]
+  printf '[main]\nNetworkingEnabled=true\n[other]\nx=1\n' >"$f"
+  nmwifi_state_on "$f"
+  [ "$(cat "$f")" = "$(printf '[main]\nNetworkingEnabled=true\nWirelessEnabled=true\n[other]\nx=1')" ]
+  printf '[other]\nx=1\n' >"$f"
+  nmwifi_state_on "$f"
+  nmwifi_state_on "$f"
+  [ "$(cat "$f")" = "$(printf '[other]\nx=1\n[main]\nWirelessEnabled=true')" ]
+  printf '[main]\nWirelessEnabled=false\nWirelessEnabled=false\nWWANEnabled=true\n' >"$f"
+  nmwifi_state_on "$f"
+  [ "$(cat "$f")" = "$(printf '[main]\nWirelessEnabled=true\nWWANEnabled=true')" ]
+  [ ! -e "$f.new" ]
+}
+
 @test "app-15 vm: country ignored, cmdline.txt and rfkill untouched" {
   net_env WIFI_SSID=Home WIFI_PASSWORD=password123 WIFI_COUNTRY=DE
   KIND=vm run_net
@@ -149,6 +182,7 @@ nm() { echo "$R/etc/NetworkManager/system-connections/emulationstation-wifi.nmco
   [ -f "$(nm)" ]
   run ! grep -q regdom "$R/boot/firmware/cmdline.txt"
   [ "$(cat "$R/var/lib/systemd/rfkill/platform-fe300000.mmcnr:wlan")" = 1 ]
+  [ ! -e "$R/var/lib/NetworkManager/NetworkManager.state" ]
 }
 
 # --- app-40-firstboot.sh: the build's country in firstboot.conf -------------------------

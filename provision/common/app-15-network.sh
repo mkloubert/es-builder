@@ -21,10 +21,11 @@
 #  - WIFI_SSID + WIFI_PASSWORD: writes the NetworkManager connection emulationstation-wifi
 #    (root, mode 0600). Bad values stop the build: the owner wants Wi-Fi, so a silent skip
 #    could leave a headless device that nobody can reach,
-#  - rpi4 + WIFI_COUNTRY: sets the Wi-Fi country now. Raspberry Pi OS blocks Wi-Fi (rfkill)
-#    until a country is set. raspi-config cannot be used in the chroot (it would change the
-#    build host), so this script does what it does: cfg80211.ieee80211_regdom=<CC> in
-#    cmdline.txt and "0" (not blocked) in every saved wlan rfkill state.
+#  - rpi4 + WIFI_COUNTRY: sets the Wi-Fi country now (cfg80211.ieee80211_regdom=<CC> in
+#    cmdline.txt; raspi-config cannot be used in the chroot, it would change the build host).
+#  - rpi4, always: Wi-Fi radio on (nmwifi_radio_on: saved wlan rfkill states "0" and
+#    WirelessEnabled=true), because Raspberry Pi OS starts with Wi-Fi blocked
+#    (spec 2026-10-31-rpi-wifi-on-design.md).
 # Secrets come from build.env (ruling R18), never from the environment or arguments.
 # Idempotent. Needs CFG_TARGET_KIND (rpi4|vm, set by step 40).
 # Test overrides: PROVISION_ROOT (path prefix), BUILD_ENV (file), PROVISION_LIB (lib dir), CHOWN.
@@ -76,16 +77,6 @@ set_regdom() {
   fi
 }
 
-# unblock_wlan : every saved wlan rfkill state (systemd-rfkill) to 0 = not blocked
-unblock_wlan() {
-  local f n=0
-  for f in "$R"/var/lib/systemd/rfkill/*:wlan; do
-    [ -f "$f" ] || continue
-    printf '0\n' >"$f"
-    n=$((n + 1))
-  done
-  log "wlan unblocked in $n saved rfkill state file(s)"
-}
 
 ssid=${CFG_WIFI_SSID:-}
 psk=${CFG_WIFI_PASSWORD:-}
@@ -113,9 +104,10 @@ if [ -n "$cc" ]; then
   cmdline=$R/boot/firmware/cmdline.txt
   [ -f "$cmdline" ] || die "cmdline.txt is missing: /boot/firmware/cmdline.txt"
   set_regdom "$cmdline" "$cc"
-  unblock_wlan
   log "Wi-Fi country $cc"
-elif [ -n "$ssid" ]; then
-  log "WARNING: WIFI_COUNTRY is empty. Raspberry Pi OS keeps Wi-Fi blocked without a country."
-  unblock_wlan
+else
+  log "WARNING: WIFI_COUNTRY is empty. Wi-Fi uses the world domain (fewer channels)."
 fi
+# Wi-Fi on from the start, with and without SSID and country (spec 2026-10-31-rpi-wifi-on-design.md)
+nmwifi_radio_on "$R" || die "Could not turn the Wi-Fi radio on"
+log "Wi-Fi radio on (rfkill state and NetworkManager.state)"

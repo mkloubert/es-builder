@@ -62,7 +62,7 @@ chmod 0755 "$lib/firstboot"
 chmod 0644 "$unit"
 
 # rpi4: the Wi-Fi country of the build. firstboot uses it when emulationstation.txt sets a
-# Wi-Fi network without WIFI_COUNTRY (Raspberry Pi OS blocks Wi-Fi without a country).
+# Wi-Fi network without WIFI_COUNTRY (it sets the channels of the country).
 # Read in a subshell, so log.sh does not replace this script's log/die.
 country=""
 if [ "$kind" = rpi4 ] && [ -f "$BUILD_ENV" ]; then

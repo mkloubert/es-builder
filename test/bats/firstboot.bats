@@ -412,6 +412,33 @@ STUB
   done
 }
 
+@test "firstboot: rpi4 turns the Wi-Fi radio on once (spec rpi-wifi-on 4.3)" {
+  mkdir -p "$FR/var/lib/NetworkManager"
+  printf '[main]\nWirelessEnabled=false\n' >"$FR/var/lib/NetworkManager/NetworkManager.state"
+  run_fb
+  [ "$status" -eq 0 ]
+  [[ $output == *"Wi-Fi radio on (first boot)"* ]]
+  [ "$(cat "$FR/var/lib/systemd/rfkill/platform-fe300000.mmcnr:wlan")" = 0 ]
+  grep -qx 'WirelessEnabled=true' "$FR/var/lib/NetworkManager/NetworkManager.state"
+  [ -f "$FR/var/lib/emulationstation/wifi-on" ]
+  no grep -q '^rfkill' "$CALLS"
+  # the owner turns Wi-Fi off later: the next boot keeps it off
+  printf '[main]\nWirelessEnabled=false\n' >"$FR/var/lib/NetworkManager/NetworkManager.state"
+  printf '1\n' >"$FR/var/lib/systemd/rfkill/platform-fe300000.mmcnr:wlan"
+  run_fb
+  [ "$status" -eq 0 ]
+  grep -qx 'WirelessEnabled=false' "$FR/var/lib/NetworkManager/NetworkManager.state"
+  [ "$(cat "$FR/var/lib/systemd/rfkill/platform-fe300000.mmcnr:wlan")" = 1 ]
+}
+
+@test "firstboot: vm does not touch the Wi-Fi radio" {
+  KIND=vm run_fb
+  [ "$status" -eq 0 ]
+  [ ! -e "$FR/var/lib/NetworkManager/NetworkManager.state" ]
+  [ ! -e "$FR/var/lib/systemd/rfkill" ]
+  [ ! -e "$FR/var/lib/emulationstation/wifi-on" ]
+}
+
 @test "firstboot: Wi-Fi without WIFI_COUNTRY on the Pi uses the build's country and unblocks wlan" {
   mkdir -p "$FR/usr/local/lib/emulationstation"
   printf 'TARGET_KIND=rpi4\nBOOT_DIR=%s\nWIFI_COUNTRY=DE\n' "$BOOT" >"$FR/usr/local/lib/emulationstation/firstboot.conf"

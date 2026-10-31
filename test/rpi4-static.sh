@@ -349,6 +349,18 @@ BOOT=boot/firmware
 # shellcheck source=test/lib/static-app.sh
 . "$ROOT/test/lib/static-app.sh"
 
+# wifi_radio_on : the Wi-Fi radio is on for the first boot (spec 2026-10-31-rpi-wifi-on-design.md):
+# the Pi 4 wlan rfkill state is 0, no saved wlan state is blocked, and WirelessEnabled=true
+wifi_radio_on() {
+  local d=$R/var/lib/systemd/rfkill f
+  [ "$(cat "$d/platform-fe300000.mmcnr:wlan" 2>/dev/null)" = 0 ] || return 1
+  for f in "$d"/*:wlan; do
+    [ "$(cat "$f")" = 0 ] || return 1
+  done
+  grep -qx 'WirelessEnabled=true' "$R/var/lib/NetworkManager/NetworkManager.state" 2>/dev/null &&
+    ! grep -qx 'WirelessEnabled=false' "$R/var/lib/NetworkManager/NetworkManager.state"
+}
+
 checks_app() {
   checks_web "ARM aarch64"
   checks_controllers
@@ -357,6 +369,7 @@ checks_app() {
   checks_firstboot
   checks_usb
   check "emulationstation-cpu.service enabled" is_wanted multi-user.target emulationstation-cpu.service
+  check "Wi-Fi radio on (rfkill state 0, WirelessEnabled=true)" wifi_radio_on
 }
 
 run_checks() {

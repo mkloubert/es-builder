@@ -15,7 +15,7 @@ not list it). The owner also wants Dreamcast and PlayStation (PS1) in the VM, an
 tools `mc` and `net-tools` (`ifconfig`) in every image.
 
 1. The VM images (`vm-amd64`, `vm-arm64`) install the RetroPie modules `vice` (C64),
-   `lr-flycast` (Dreamcast) and `lr-pcsx-rearmed` (PS1). The web UI then knows `.d64`, `.prg`,
+   `flycast` (Dreamcast, standalone) and `lr-pcsx-rearmed` (PS1). The web UI then knows `.d64`, `.prg`,
    `.t64`, `.cdi`, `.gdi`, `.cue`, `.chd`, `.pbp`, … in the VM.
 2. Every image with VICE has a new ES system `c64music` ("Commodore 64 Music") for `.sid` files.
    An upload of a `.sid` file goes to `~/RetroPie/roms/c64music/`. In ES, the file starts with
@@ -30,7 +30,7 @@ tools `mc` and `net-tools` (`ifconfig`) in every image.
 
 | Topic | Decision | Reason |
 |---|---|---|
-| VM modules | add `vice`, `lr-flycast` and `lr-pcsx-rearmed` to `provision/vm/modules.list` | owner's wish; RetroPie builds them from source for x86 and aarch64; same PS1 core as rpi4 |
+| VM modules | add `vice`, `flycast` and `lr-pcsx-rearmed` to `provision/vm/modules.list` | owner's wish; RetroPie builds them from source for x86 and aarch64; same PS1 core as rpi4 |
 | Shell tools | `mc` and `net-tools` in a new app script `provision/common/app-12-tools.sh` | CLAUDE.md: new packages go into the app layer, so the rpi4 base cache stays valid |
 | `.sid` place | own ES system `c64music`, not more extensions for `c64` | `c64` starts every file with `x64`, and `x64` cannot start a `.sid` (VICE 3.7.1 `autostart.c` has no PSID support); a per-file emulator choice would be needed for every `.sid` |
 | Player | `/opt/retropie/emulators/vice/bin/vice.sh vsid %ROM%` | `vsid` is part of VICE 3.7.1 (`bin_PROGRAMS` in `src/Makefile.am`), `vice.sh` is RetroPie's start script with zip support |
@@ -48,6 +48,11 @@ Ruling: `vice.sh` gets `-chdir <dir>` before the file, also for `vsid` — `-chd
 VICE option of every VICE program — cost if wrong: `.sid` does not start in ES (the hardware
 checklist, section 6, shows it).
 
+Ruling: use the standalone `flycast` module in the VM, not `lr-flycast` — `lr-flycast` builds the
+moving `master` branch of libretro/flycast, and its RetroPie patch `02_gcc14_unistd_fix.diff` no
+longer applies there (vm-arm64 build, 2026-10-31); `flycast` has no patches — cost if wrong: a
+different Dreamcast emulator than on the Pi (rpi4 keeps the `lr-flycast` binary).
+
 Ruling: Dreamcast in the VM runs with software rendering (no GPU in most VMs) — the VM is for
 testing, playing is not a goal (README) — cost if wrong: slow games in the VM.
 
@@ -55,7 +60,7 @@ testing, playing is not a goal (README) — cost if wrong: slow games in the VM.
 
 ### 3.1 VM emulator list (`provision/vm/modules.list`)
 
-Append `vice`, `lr-flycast` and `lr-pcsx-rearmed`. This changes the base cache key of both VM targets (rpi4 is not
+Append `vice`, `flycast` and `lr-pcsx-rearmed`. This changes the base cache key of both VM targets (rpi4 is not
 affected). A failure is handled like every other module (report line, build goes on).
 
 ### 3.2 C64 music system (`provision/common/app-25-c64music.sh`)

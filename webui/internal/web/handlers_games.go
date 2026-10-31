@@ -68,7 +68,6 @@ type gamesView struct {
 	All     bool
 	Notice  string
 	Changes changesView
-	Scrape  bool // the system can be scraped
 }
 
 type romRow struct {
@@ -86,6 +85,7 @@ type systemView struct {
 	GLPath  string
 	Notice  string
 	Changes changesView
+	Scrape  bool // the system can be scraped
 }
 
 type kv struct{ Name, Value string }

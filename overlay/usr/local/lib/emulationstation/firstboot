@@ -19,6 +19,7 @@
 #  1. Makes the SSH host keys if there are none. VM only: grows the root partition once
 #     (growpart + resize2fs, marker /var/lib/emulationstation/grown). Raspberry Pi OS grows
 #     the partition by itself.
+#     Raspberry Pi only: turns the Wi-Fi radio on once (marker /var/lib/emulationstation/wifi-on).
 #  2. If BOOT_DIR/emulationstation.txt exists, applies it and renames it to
 #     emulationstation.txt.applied.
 #
@@ -480,9 +481,28 @@ process_file() {
   finish_file "$file"
 }
 
+# wifi_on_once : Raspberry Pi only, once (marker $STATE_DIR/wifi-on): Wi-Fi radio on for the start
+# of NetworkManager, which runs after this script (spec 2026-10-31-rpi-wifi-on-design.md 4.3). Only
+# once, so a later "Wi-Fi off" of the owner stays.
+wifi_on_once() {
+  [ "$TARGET_KIND" = rpi4 ] || return 0
+  [ ! -e "$STATE_DIR/wifi-on" ] || return 0
+  if ! nmwifi_radio_on "$R"; then
+    log "ERROR: could not turn the Wi-Fi radio on"
+    FAILS=$((FAILS + 1))
+    return 0
+  fi
+  log "Wi-Fi radio on (first boot)"
+  if ! mkdir -p "$STATE_DIR" || ! : >"$STATE_DIR/wifi-on"; then
+    log "ERROR: could not write the marker $STATE_DIR/wifi-on"
+    FAILS=$((FAILS + 1))
+  fi
+}
+
 main() {
   ensure_host_keys
   grow_root
+  wifi_on_once
   process_file
   [ "$FAILS" -eq 0 ] || exit 1
   exit 0

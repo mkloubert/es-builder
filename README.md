@@ -9,7 +9,7 @@ web page to manage the system.
 - `rpi4`: image for the Raspberry Pi 4 (2 GB). It boots straight into EmulationStation.
 - `vm-amd64` and `vm-arm64`: UEFI images for QEMU, UTM or VirtualBox. They are for testing the web
   UI, SSH and the firewall. Playing games in the VM is not a goal. The VM has only a few systems:
-  NES, SNES, Game Boy, C64 (`vice`), Dreamcast (`lr-flycast`) and PlayStation (`lr-pcsx-rearmed`).
+  NES, SNES, Game Boy, C64 (`vice`), Dreamcast (`flycast`) and PlayStation (`lr-pcsx-rearmed`).
 
 What you get:
 
@@ -75,8 +75,10 @@ Edit `build.conf`. The file is plain `KEY=VALUE`. Values are not executed.
   Empty means no link.
 - `WIFI_SSID`, `WIFI_PASSWORD`, `WIFI_COUNTRY` (optional): Wi-Fi. Empty means LAN with DHCP.
   The image connects to this network at boot (WPA2/WPA3 personal; open networks are not supported).
-  On the Raspberry Pi, `WIFI_COUNTRY` matters: Raspberry Pi OS blocks Wi-Fi until a country is set.
-  Use the two-letter code of your country (for example `DE`, `US`, `GB`).
+  On the Raspberry Pi, Wi-Fi is on from the first boot (the build and the first boot turn the
+  radio on, which Raspberry Pi OS blocks by default). Set `WIFI_COUNTRY` to the two-letter code of
+  your country (for example `DE`, `US`, `GB`). Without it, Wi-Fi uses fewer, safe channels.
+  If you turn Wi-Fi off later (`sudo nmcli radio wifi off`), it stays off.
 - `SCREENSCRAPER_USER` and `SCREENSCRAPER_PASSWORD` (optional): account for the scraper.
 - `LOCALE`, `TIMEZONE`, `KEYMAP`: system settings. The defaults are German.
 - The "Upstream pins" at the end (image URLs, checksums, versions) are tested together. Change
@@ -219,8 +221,8 @@ Keys: `HOSTNAME`, `WIFI_SSID`, `WIFI_PASSWORD`, `WIFI_COUNTRY`, `TIMEZONE`, `KEY
 `USER_PASSWORD`, `WEB_USER`, `WEB_PASSWORD`. Unknown keys are ignored.
 
 - The file is read at **every** boot, not only the first one. So you can change the Wi-Fi later.
-- On the Raspberry Pi, set `WIFI_COUNTRY` together with the Wi-Fi lines. Raspberry Pi OS blocks
-  Wi-Fi without a country. If it is missing, the country from `build.conf` is used.
+- On the Raspberry Pi, set `WIFI_COUNTRY` together with the Wi-Fi lines. If it is missing, the
+  country from `build.conf` is used.
 - After it was used, the file is renamed to `emulationstation.txt.applied`. In that copy all
   passwords are `***`. Lines that could not be used are listed at the end with the reason.
 - Until the boot, passwords are readable in the file by anyone who holds the card.

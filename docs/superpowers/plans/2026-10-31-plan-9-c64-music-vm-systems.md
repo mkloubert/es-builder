@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this
 > plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The VM images get `vice` and `lr-flycast`. Every image with VICE gets an ES system
+**Goal:** The VM images get `vice`, `flycast` and `lr-pcsx-rearmed`. Every image with VICE gets an ES system
 `c64music` for `.sid` files. The web UI does not offer scraping for it.
 
 **Spec:** `docs/superpowers/specs/2026-10-31-c64-music-vm-systems-design.md`
@@ -17,7 +17,7 @@
 
 ## Tasks
 
-- [ ] 1. `provision/vm/modules.list`: append `vice`, `lr-flycast` and `lr-pcsx-rearmed`.
+- [ ] 1. `provision/vm/modules.list`: append `vice`, `flycast` and `lr-pcsx-rearmed`.
 - [ ] 1a. `provision/common/app-12-tools.sh` (spec 3.2a) + `test/bats/tools.bats` + static check
   for `mc` and `ifconfig`.
 - [ ] 1b. `overlay/etc/profile.d/20-emulationstation-sbin.sh` (spec 3.2b) + tests.

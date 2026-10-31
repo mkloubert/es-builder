@@ -81,3 +81,49 @@ nmwifi_write() {
     return 1
   fi
 }
+
+# nmwifi_state_on <file> : NetworkManager.state with WirelessEnabled=true in [main]. A missing
+# file or [main] section is created; all other lines stay. Temp file + rename, mode 0644.
+nmwifi_state_on() {
+  local f=$1 tmp=$1.new
+  mkdir -p "$(dirname "$f")" || return 1
+  if [ -f "$f" ]; then
+    awk '
+      /^[[:space:]]*\[/ {
+        if (inmain && !done) { print "WirelessEnabled=true"; done = 1 }
+        inmain = ($0 ~ /^[[:space:]]*\[main\][[:space:]]*$/)
+        if (inmain) seen = 1
+        print
+        next
+      }
+      inmain && /^[[:space:]]*WirelessEnabled[[:space:]]*=/ {
+        if (!done) { print "WirelessEnabled=true"; done = 1 }
+        next
+      }
+      { print }
+      END {
+        if (inmain && !done) { print "WirelessEnabled=true"; done = 1 }
+        if (!seen) { print "[main]"; print "WirelessEnabled=true" }
+      }' "$f" >"$tmp" || { rm -f "$tmp"; return 1; }
+  else
+    printf '[main]\nWirelessEnabled=true\n' >"$tmp" || { rm -f "$tmp"; return 1; }
+  fi
+  if ! chmod 0644 "$tmp" || ! mv -f "$tmp" "$f"; then
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
+# nmwifi_radio_on <root> : turns Wi-Fi on for the next start (spec 2026-10-31-rpi-wifi-on-design.md
+# 4.1). Raspberry Pi OS starts every radio blocked (rfkill default_state=0) and its image has
+# WirelessEnabled=false. So: "0" in every saved wlan rfkill state, plus the Pi 4 on-board Wi-Fi
+# file, and WirelessEnabled=true. <root> is a path prefix ("" = /). Returns 1 on failure.
+nmwifi_radio_on() {
+  local root=$1 dir=$1/var/lib/systemd/rfkill f
+  mkdir -p "$dir" || return 1
+  for f in "$dir"/*:wlan "$dir/platform-fe300000.mmcnr:wlan"; do
+    case "$f" in *'*:wlan') continue ;; esac
+    if ! printf '0\n' >"$f" || ! chmod 0644 "$f"; then return 1; fi
+  done
+  nmwifi_state_on "$root/var/lib/NetworkManager/NetworkManager.state"
+}
