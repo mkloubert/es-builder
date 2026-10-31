@@ -24,14 +24,22 @@
 #   are the data of the build host, so __platform is preset (rpi4). platform_rpi4 calls
 #   cpu_armv8, which sets the flag aarch64 when "getconf LONG_BIT" = 64; so rpi4 is also correct for
 #   64-bit. In the chroot (__chroot=1) get_rpi_video sets KMS (mesa kms) for rpi4.
-# - OS check (scriptmodules/system.sh get_os_version): Debian/Raspbian is rejected only below 8;
-#   trixie (13) is allowed. A rejection ends in fatalError (exit 1) during
-#   setup_env, so before any module. Prebuilt binaries exist only for Debian 10-12
-#   (__has_binaries), for trixie every module is built from source.
+# - OS check (scriptmodules/system.sh get_os_version): Debian/Raspbian is rejected only below 8.
+#   A rejection ends in fatalError (exit 1) during setup_env, so before any module.
+# - Prebuilt binaries (__has_binaries=1) exist only on the Raspberry Pi with Raspberry Pi OS 12
+#   (bookworm). For the Pi 4 they are at files.retropie.org.uk/binaries/bookworm-64/rpi4/kms/ and
+#   RetroPie checks each one with GPG. There are none for x86 or generic aarch64 (the VMs).
 # - A call without a mode ("retropie_packages.sh <module>") = _source_:
 #   depends sources build install configure clean (if install is missing, install_bin is used).
-#   _auto_ would be equivalent on trixie, but also needs a route to the internet
-#   ("ip route get"), which is unreliable under qemu-user in the chroot.
+#   "_binary_" = depends install_bin configure. If RetroPie has no binary URL for this OS,
+#   install_bin fails.
+#   _auto_ is not used: it needs a route to the internet ("ip route get"), which is unreliable
+#   under qemu-user in the chroot.
+# - Binary mode (rpi4 only, spec 2026-10-31-bookworm-design.md 3.2): every module is tried with
+#   _binary_ first. If that fails, it is built from source and gets the report line
+#   "<m> 0 built from source, no binary". runcommand is a script module and has no binary.
+#   retroarch and emulationstation must come from a binary: without one the build stops, because
+#   then RetroPie has no binaries for this OS at all (wrong image or platform).
 # - Exit: 0 ok, 1 error (also __ERRMSGS), 2 module unknown, 3 not available for the platform.
 # - __nodialog=1, so no dialog boxes are opened on /dev/tty.
 #
@@ -69,6 +77,9 @@ kind=${CFG_TARGET_KIND:?CFG_TARGET_KIND is missing}
 report=${PROVISION_REPORT:?PROVISION_REPORT is missing}
 modlist=${PROVISION_DIR:?PROVISION_DIR is missing}/$kind/modules.list
 CORE="retroarch emulationstation runcommand"
+# RetroPie binaries exist only for Raspberry Pi OS 12 (bookworm-64/rpi4/kms)
+BINARY=0
+[ "$kind" != rpi4 ] || BINARY=1
 
 getent passwd "$U" >/dev/null || die "User $U is missing (base-20-user.sh)"
 
@@ -149,16 +160,18 @@ out=$(rp 2>&1 </dev/null) || rc=$?
 if [ "$rc" -ne 0 ]; then
   printf '%s\n' "$out" | tail -n 40 >&2
   if grep -qE 'Unsupported OS|You need .* or newer|We do not support' <<<"$out"; then
-    die "RetroPie rejects trixie – please ask the user, spec section 9"
+    die "RetroPie rejects this OS – see spec 2026-10-31-bookworm-design.md"
   fi
   die "RetroPie-Setup cannot be initialised (exit $rc), see the output above"
 fi
 
+# install_module <module> [mode] : one retropie_packages.sh call (no mode = _source_); removes the
+# build tree after a failure
 install_module() {
-  local m=$1 rc=0
-  log "Installing module $m"
+  local m=$1 mode=${2:-} rc=0
+  log "Installing module $m${mode:+ ($mode)}"
   # no stdin: nothing in a module build may wait for an answer
-  rp "$m" </dev/null || rc=$?
+  rp "$m" ${mode:+"$mode"} </dev/null || rc=$?
   if [ "$rc" -ne 0 ] && [ -e "$RP/tmp/build/$m" ]; then
     log "Removing build tree of $m"
     rm -rf "${RP:?}/tmp/build/${m:?}"
@@ -167,9 +180,34 @@ install_module() {
   return "$rc"
 }
 
+# install_auto <module> : binary mode: _binary_ first, then _source_ with a report line;
+# otherwise (VM, runcommand) only _source_. Returns the exit code of the last call.
+install_auto() {
+  local m=$1 rc=0
+  if [ "$BINARY" != 1 ] || [ "$m" = runcommand ]; then
+    install_module "$m"
+    return
+  fi
+  install_module "$m" _binary_ && return 0
+  log "No binary for $m, building it from source"
+  dpkg_repair "after the binary of $m"
+  install_module "$m" || rc=$?
+  [ "$rc" -ne 0 ] || report_fail "$m" 0 "built from source, no binary"
+  return "$rc"
+}
+
 # --- Core modules --------------------------------------------------------------
+# In binary mode retroarch and emulationstation get no source fallback (see the header)
 for m in $CORE; do
   rc=0
+  if [ "$BINARY" = 1 ] && [ "$m" != runcommand ]; then
+    install_module "$m" _binary_ || rc=$?
+    if [ "$rc" -ne 0 ]; then
+      report_fail "$m" "$rc" "no RetroPie binary"
+      die "No RetroPie binary for $m. Check the network and files.retropie.org.uk."
+    fi
+    continue
+  fi
   install_module "$m" || rc=$?
   if [ "$rc" -ne 0 ]; then
     report_fail "$m" "$rc" "$(hint_for "$rc")"
@@ -181,7 +219,7 @@ done
 
 # --- Scraper -----------------------------------------------------------------
 rc=0
-install_module skyscraper || rc=$?
+install_auto skyscraper || rc=$?
 if [ "$rc" -ne 0 ]; then
   report_fail skyscraper "$rc" "$(hint_for "$rc")"
   dpkg_repair "after skyscraper"
@@ -194,7 +232,7 @@ while IFS= read -r m || [ -n "$m" ]; do
   m=${m//[[:space:]]/}
   [ -n "$m" ] || continue
   rc=0
-  install_module "$m" || rc=$?
+  install_auto "$m" || rc=$?
   if [ "$rc" -ne 0 ]; then
     report_fail "$m" "$rc" "$(hint_for "$rc")"
     log "Module $m failed (exit $rc), continuing"

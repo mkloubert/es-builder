@@ -58,14 +58,14 @@ matched_lines() {
   [ "$(matched_lines "$line" "$FILTER")" = 0 ]
 }
 
-@test "sshd filter (Debian): a failed login logged by sshd-session (OpenSSH 9.8+) matches" {
+@test "sshd filter (Debian): a failed login logged by sshd-session (OpenSSH 9.8+, later Debian) matches" {
   need_f2b
   [ -f /etc/fail2ban/filter.d/sshd.conf ] || skip "sshd filter is not installed"
   line="Oct 27 12:00:00 host sshd-session[4242]: Failed password for invalid user bob from 10.0.0.9 port 51234 ssh2"
   [ "$(matched_lines "$line" sshd)" = 1 ]
 }
 
-@test "sshd filter (Debian): a failed login logged by sshd still matches" {
+@test "sshd filter (Debian): a failed login logged by sshd (OpenSSH 9.2, bookworm) matches" {
   need_f2b
   [ -f /etc/fail2ban/filter.d/sshd.conf ] || skip "sshd filter is not installed"
   line="Oct 27 12:00:00 host sshd[4242]: Failed password for invalid user bob from 10.0.0.9 port 51234 ssh2"

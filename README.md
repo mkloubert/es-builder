@@ -3,7 +3,7 @@
 License: AGPL-3.0-or-later, see LICENSE
 
 EmuStation Builder makes a ready-to-use retro gaming system. It builds a disk image with
-Debian 13 ("trixie"), EmulationStation (RetroPie) with the EpicNoir theme, many emulators, and a
+Debian 12 ("bookworm"), EmulationStation (RetroPie) with the EpicNoir theme, many emulators, and a
 web page to manage the system.
 
 - `rpi4`: image for the Raspberry Pi 4 (2 GB). It boots straight into EmulationStation.
@@ -30,11 +30,11 @@ Source code: <https://github.com/mkloubert/es-builder>
   (it starts the `tonistiigi/binfmt` container). Docker must be allowed to run privileged containers.
 - Internet access during the build.
 
-**Build time.** RetroPie builds every emulator from source on trixie. On an arm64 computer
-(for example an Apple Silicon Mac) expect several hours for the first Pi image. On an amd64
-computer the arm64 code runs under emulation, and the first build can take a day or more. The
-result of this slow step is stored in a Docker volume (the base layer cache). Later builds reuse
-it and are much faster. The cache changes only if the base scripts or the version pins change, or
+**Build time.** On the Pi, most emulators come as prebuilt RetroPie binaries, so the first Pi
+image is much faster than a build from source. The VM images still build their few emulators from
+source. On an amd64 computer the arm64 code runs under emulation, which is slower. The result of
+this step is stored in a Docker volume (the base layer cache). Later builds reuse it and are much
+faster. The cache changes only if the base scripts or the version pins change, or
 if you use `--rebuild-base`.
 
 ## Set up `build.conf`
@@ -376,10 +376,12 @@ start from the web UI on a real terminal, Bluetooth and controller templates on 
 setup through NetworkManager, emulator speed and temperature (N64 and PSP depend on the game), and
 the VM display. The most important open points:
 
-- RetroPie is not officially supported on trixie. If a module fails to build, it is skipped and
-  listed in the build report.
-- SDL on trixie may write a CRC field into controller GUIDs. The templates were made for this, and
-  the name of the controller is used as a fallback.
+- The images use Debian 12 ("bookworm"). It gets LTS security updates until 2028-06-30.
+- On the Pi most modules come as RetroPie binaries. A module without a binary is built from
+  source and listed in `out/build-report.txt` ("built from source, no binary"). A module that
+  fails is skipped and listed there too.
+- SDL 2.26 and newer writes a CRC field into controller GUIDs. The templates were made for this,
+  and the name of the controller is used as a fallback.
 
 
 ## License

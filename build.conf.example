@@ -50,19 +50,19 @@ WIFI_COUNTRY=DE
 SCREENSCRAPER_USER=
 SCREENSCRAPER_PASSWORD=
 
-# --- Upstream pins (state of research: 2026-10-28) -------------------------
+# --- Upstream pins (state of research: 2026-10-31) -------------------------
 # Checksums: sha256:<hex> or sha512:<hex>
 
-# Raspberry Pi OS Lite arm64 (trixie), Release 2026-10-06
-RPI_IMAGE_URL=https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-10-06/2026-10-06-raspios-trixie-arm64-lite.img.xz
-RPI_IMAGE_CHECKSUM=sha256:483db18a48da399b5b7022ffae9a07bc6d99daab30e593aedac09b69ff422843
+# Raspberry Pi OS Lite arm64 (bookworm, oldstable), Release 2026-10-06
+RPI_IMAGE_URL=https://downloads.raspberrypi.com/raspios_oldstable_lite_arm64/images/raspios_oldstable_lite_arm64-2026-10-06/2026-10-06-raspios-bookworm-arm64-lite.img.xz
+RPI_IMAGE_CHECKSUM=sha256:9e938c5a6981c3f498b3b564c527f3e1fd58ef20bbf703be0eea748384a6c1af
 
-# Debian 13 (trixie) nocloud, UEFI, format .raw, dated directory 20261026-2643
+# Debian 12 (bookworm) nocloud, UEFI, format .raw, dated directory 20261026-2643
 # (Debian publishes only SHA512SUMS)
-VM_IMAGE_URL_AMD64=https://cloud.debian.org/images/cloud/trixie/20261026-2643/debian-13-nocloud-amd64-20261026-2643.raw
-VM_IMAGE_CHECKSUM_AMD64=sha512:f76064d3964089e7a1645b69de587bf526591dd3e68f1effc95c93c79c0239a700823ae38ed3d57e3af4ac9c36a09a9a7b11e9197e872d5845b132977d8ca481
-VM_IMAGE_URL_ARM64=https://cloud.debian.org/images/cloud/trixie/20261026-2643/debian-13-nocloud-arm64-20261026-2643.raw
-VM_IMAGE_CHECKSUM_ARM64=sha512:f34fb447ceece3d6a5fff1110a9acd113748bfed16de9158f8ef1952d2c65acc98f58fedd4d765511d43933b8d7e32a7792c3a0721382b01a8bff322f1a3b591
+VM_IMAGE_URL_AMD64=https://cloud.debian.org/images/cloud/bookworm/20261026-2643/debian-12-nocloud-amd64-20261026-2643.raw
+VM_IMAGE_CHECKSUM_AMD64=sha512:728546720db094ab840752214b83cf834e08b9848b5f4b2a9aa4bfbf740cf9b7ab95cc414172d8a729555bccd8c4995ab8a6223b0c19b769bd83fe3897570667
+VM_IMAGE_URL_ARM64=https://cloud.debian.org/images/cloud/bookworm/20261026-2643/debian-12-nocloud-arm64-20261026-2643.raw
+VM_IMAGE_CHECKSUM_ARM64=sha512:e564abc9f96f9e691cb212227bab576bae6fce3b2ad2c7918734ae056278cb0f6f8e47bbda4f30ba4a00d6ffc06db86c8f132889889b737c81c40fdb6f64954f
 
 # RetroPie-Setup, master on 2026-10-23
 RETROPIE_SETUP_REF=f5ebfba638179631d4619f2b52075dec33d4bca8

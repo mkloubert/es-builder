@@ -20,8 +20,8 @@
 # whose kernel is not in the image (DKMS would then build against a foreign kernel).
 # Environment: CFG_TARGET_KIND (rpi4|vm), CFG_TARGET_ARCH (arm64|amd64).
 #
-# VM: the pinned Debian 13 nocloud image ships the generic kernel "linux-image-<arch>"
-# (checked in the package list of debian-13-nocloud-*-20261026-2643.json; there is no
+# VM: the pinned Debian 12 nocloud image ships the generic kernel "linux-image-<arch>"
+# (checked in the package list of debian-12-nocloud-*-20261026-2643.json; there is no
 # linux-image-cloud-*). It has DRM and virtio-gpu, so no kernel change is needed. The headers
 # must match the INSTALLED kernel version (xpadneo DKMS builds from /lib/modules/<ver>/build), so
 # we install linux-headers-<release> of that kernel. If the archive no longer has it (a newer

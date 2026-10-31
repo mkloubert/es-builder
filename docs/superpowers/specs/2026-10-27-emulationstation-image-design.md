@@ -8,8 +8,8 @@ As of: 2026-10-27 · Status: draft for approval
 
 Bash scripts that build a finished, bootable image on **Linux and macOS** (each on **amd64 and arm64**):
 
-- **`rpi4`** – Raspberry Pi 4 (2 GB RAM), Debian 13 "trixie" (Raspberry Pi OS Lite arm64), EmulationStation (RetroPie) with the theme **EpicNoir**, preinstalled emulators and a web UI.
-- **`vm-amd64` / `vm-arm64`** – generic UEFI image (Debian 13) with an identical setup **for testing** the web UI, SSH, firewall and so on. EmulationStation runs there with software rendering only; playing games is not a goal.
+- **`rpi4`** – Raspberry Pi 4 (2 GB RAM), Debian 12 "bookworm" (Raspberry Pi OS Lite arm64, see `2026-10-31-bookworm-design.md`), EmulationStation (RetroPie) with the theme **EpicNoir**, preinstalled emulators and a web UI.
+- **`vm-amd64` / `vm-arm64`** – generic UEFI image (Debian 12) with an identical setup **for testing** the web UI, SSH, firewall and so on. EmulationStation runs there with software rendering only; playing games is not a goal.
 
 Success criteria:
 
@@ -27,8 +27,8 @@ Note: The output format is a disk image (`.img`), not an ISO – Pi and VM boot 
 |---|---|---|
 | ES variant | RetroPie EmulationStation via RetroPie-Setup | EpicNoir is a legacy ES theme; ES-DE ≥ 2.2 does not load legacy themes |
 | Build approach | Customise official images (loop mount + chroot) in Docker | proven bootloader/firmware/kernel, little own code |
-| Pi base | Raspberry Pi OS Lite trixie arm64 (version pinned) | official Pi support |
-| VM base | Debian 13 cloud image `nocloud`, raw, UEFI (amd64/arm64) | official, slim UEFI image |
+| Pi base | Raspberry Pi OS Lite bookworm arm64 (version pinned) | official Pi support, RetroPie binaries (`2026-10-31-bookworm-design.md`) |
+| VM base | Debian 12 cloud image `nocloud`, raw, UEFI (amd64/arm64) | official, slim UEFI image |
 | Build speed-up | two stages: cached base layer (RetroPie + emulators) + fast app layer | compiling RetroPie under QEMU takes hours |
 | Display names | automatic cleanup + manually editable + optional scraping (Skyscraper/ScreenScraper) | |
 | Network config | `build.conf` at build time + `emulationstation.txt` on the boot partition at first boot | one image for different networks |
@@ -314,9 +314,9 @@ Games and BIOS files can also be imported from a USB stick (page "USB", helper s
 
 ## 9. Risks and open points
 
-- **RetroPie on trixie** is not officially supported, but according to the community it runs on 64-bit Lite. If RetroPie-Setup rejects trixie or modules do not build: error in the base log, the affected module is skipped and listed in the build report; a fallback option would be Raspberry Pi OS bookworm (that would no longer be Debian 13 – only after asking the user).
+- **RetroPie on bookworm:** see `2026-10-31-bookworm-design.md` section 5 (moved from trixie on 2026-10-31).
 - **Build time** of the base layer: on arm64 hosts natively about 1–2 h, on amd64 hosts under QEMU much longer (≥ 10 h possible). Precompiled RetroPie binaries are used where available. After that, the cache applies.
 - **N64/PSP** depend on the game; this is documented and not a bug.
-- **Controller GUIDs:** newer SDL versions (trixie ships SDL2 as `sdl2-compat` on top of SDL3) can write a CRC field into the GUID. The GUIDs of the templates and the calculation in the web UI must match the SDL version in the image; this is verified on real hardware. Fallback: additional matching by device name.
+- **Controller GUIDs:** SDL 2.26 and newer (bookworm has 2.26.5) writes a CRC field into the GUID. The GUIDs of the templates and the calculation in the web UI must match the SDL version in the image; this is verified on real hardware. Fallback: additional matching by device name.
 - **xpadneo** is built with DKMS against the Pi kernel; if that fails, it is listed in the build report and Xbox controllers work over USB only.
 - **Basic Auth** is limited to HTTPS; without importing the CA the browser shows a warning.

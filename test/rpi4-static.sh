@@ -136,6 +136,10 @@ root_locked() {
 }
 is_masked() { [ "$(readlink "$R/etc/systemd/system/$1" 2>/dev/null || true)" = /dev/null ]; }
 is_wanted() { [ -L "$R/etc/systemd/system/$1.wants/$2" ] || [ -e "$R/etc/systemd/system/$1.wants/$2" ]; }
+# not_wanted <target> <unit> : the unit is not enabled for the target (also a dangling link)
+not_wanted() { ! is_wanted "$1" "$2"; }
+# sysv_enabled <name> : an SysV init script has a start link in a runlevel directory
+sysv_enabled() { compgen -G "$R/etc/rc[2-5].d/S[0-9][0-9]$1" >/dev/null; }
 has_line() { grep -qxF "$2" "$R/$1" 2>/dev/null; }
 no_match() { ! grep -qE "$2" "$R/$1" 2>/dev/null; }
 has_word() { grep -qE "(^|[[:space:]])$2([[:space:]]|\$)" "$R/$1" 2>/dev/null; }
@@ -158,6 +162,7 @@ xpadneo_reported() {
 checks_base() {
   local g m k d mods=0 kernels=0
 
+  check "Debian 12 bookworm" has_line etc/os-release VERSION_CODENAME=bookworm
   check "User emulationstation (home, bash)" user_ok
   for g in sudo video render input audio bluetooth; do
     check "User emulationstation in group $g" in_group "$g" emulationstation
@@ -172,8 +177,11 @@ checks_base() {
   check "config.txt: dtoverlay=vc4-kms-v3d" has_line boot/firmware/config.txt dtoverlay=vc4-kms-v3d
   check "config.txt: disable_overscan=1" has_line boot/firmware/config.txt disable_overscan=1
   check "config.txt: no disable-bt" no_match boot/firmware/config.txt '^[[:space:]]*dtoverlay=(pi3-)?disable-bt'
-  check "cmdline.txt: resize (root grows at first boot)" has_word boot/firmware/cmdline.txt resize
-  check "rpi-resize.service enabled" is_wanted sysinit.target rpi-resize.service
+  check "cmdline.txt: firstboot init (root grows at first boot)" has_word boot/firmware/cmdline.txt init=/usr/lib/raspberrypi-sys-mods/firstboot
+  check "dphys-swapfile not enabled" not_wanted multi-user.target dphys-swapfile.service
+  if [ -e "$R/etc/init.d/resize2fs_once" ]; then
+    check "resize2fs_once enabled (file system grows at first boot)" sysv_enabled resize2fs_once
+  fi
   check "cloud-init disabled" cloud_init_off
   check "zramswap: ALGO=zstd" has_line etc/default/zramswap ALGO=zstd
   check "zramswap: PERCENT=50" has_line etc/default/zramswap PERCENT=50

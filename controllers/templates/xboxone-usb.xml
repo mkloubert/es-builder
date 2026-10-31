@@ -34,7 +34,7 @@ name is the fallback when the version in the GUID differs (spec section 9).
 The CRC in the GUID is computed from the kernel name (see guid-source).
 SDL names 045e:02ea "Xbox One S Controller" (controller_list.h).
 
-GUID with CRC (SDL 2.26 and newer, also sdl2-compat on SDL3 in trixie) and without CRC
+GUID with CRC (SDL 2.26 and newer, as on bookworm) and without CRC
 (older SDL), computed with "emulationstation-web guid" from these values:
 guid-source: bus=0x03 vendor=0x045e product=0x02ea version=0x0517 name="Microsoft X-Box One S pad"
 
@@ -42,7 +42,7 @@ UNVERIFIED - check on hardware: The version is the controller firmware (seen: 0x
   0x0511, 0x0515, 0x0517). 0x0517 is the newest value seen. Other firmware: only
   the name match works.
 UNVERIFIED - check on hardware: ES writes the SDL name "Xbox One S Controller" (not the kernel name) as deviceName
-  on trixie (SDL 3.2 with sdl2-compat).
+  on bookworm (SDL 2.26 or newer).
 
 Sources:
   https://github.com/raspberrypi/linux/blob/rpi-6.18.y/drivers/input/joystick/xpad.c

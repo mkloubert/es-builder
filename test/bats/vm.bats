@@ -334,10 +334,11 @@ EOF2
 # --- test/vm-static.sh --root --------------------------------------------------------
 
 vm_good_root() {
-  local r=$1 arch=$2 k=6.12.113+deb13-$2 m params
+  local r=$1 arch=$2 k=6.1.0-54-$2 m params
   mkdir -p "$r/etc/systemd/system/getty.target.wants" "$r/boot/grub" "$r/lib/modules/$k/kernel" \
     "$r/lib/modules/$k/updates/dkms" "$r/opt/retropie/supplementary/emulationstation" \
     "$r/opt/retropie/libretrocores" "$r/home/emulationstation/RetroPie-Setup/.git" "$r/etc/default/grub.d"
+  printf 'NAME="Debian GNU/Linux"\nVERSION_CODENAME=bookworm\n' >"$r/etc/os-release"
   printf 'root:x:0:0:root:/root:/bin/bash\nemulationstation:x:1000:1000::/home/emulationstation:/bin/bash\n' >"$r/etc/passwd"
   printf 'root:!:20000:0:99999:7:::\nemulationstation:!:20000:0:99999:7:::\n' >"$r/etc/shadow"
   printf '%s\n' root:x:0: sudo:x:27:emulationstation audio:x:29:emulationstation video:x:44:emulationstation \

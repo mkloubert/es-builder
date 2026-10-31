@@ -64,7 +64,7 @@ editor, so the file has CRLF line ends. Set host name, Wi-Fi, time zone, keyboar
 - [ ] Wi-Fi: `nmcli connection show emulationstation-wifi` exists and the Pi joins the network.
   Test an SSID with spaces, with `\` and with `;`, and an SSID that is only digits. NetworkManager
   must accept the key file for each of them.
-- [ ] `raspi-config nonint do_wifi_country DE` works at this point of the boot on trixie
+- [ ] `raspi-config nonint do_wifi_country DE` works at this point of the boot on bookworm
   (see the journal of the first boot service). The Wi-Fi country is set.
 - [ ] SSH login with the new password works. Web login with the new web user and password works.
 - [ ] `stat -c '%U %a' /etc/emulationstation-web/web.conf` prints `emulationstation 600`.
@@ -82,8 +82,8 @@ editor, so the file has CRLF line ends. Set host name, Wi-Fi, time zone, keyboar
   is rejected. Port 22 is closed.
 - [ ] `sudo` asks for the password. `sudo reboot` and `sudo poweroff` work without it.
 - [ ] Five wrong SSH passwords from one computer: the next connection is refused for 1 hour
-  (`sudo fail2ban-client status sshd` lists the address). The ban also works when the failed
-  logins come from sshd-session (trixie OpenSSH). Unban in the web UI (System page).
+  (`sudo fail2ban-client status sshd` lists the address). The failed logins come from `sshd`
+  (OpenSSH 9.2 on bookworm). Unban in the web UI (System page).
 - [ ] Five wrong web logins: the web UI stops answering for that address. Unban in the web UI
   from another address, or on the device with
   `sudo /usr/local/lib/emulationstation/priv f2b-unban <ip>`.
@@ -140,7 +140,7 @@ The templates are in `controllers/templates/` (see the README there). A template
 work in ES **and** in RetroArch without the "Configure Input" wizard. Test each controller you own,
 once with the menu in ES and once in a game.
 
-- [ ] ES on trixie writes the SDL names "Xbox 360 Controller", "Xbox One S Controller" and
+- [ ] ES on bookworm writes the SDL names "Xbox 360 Controller", "Xbox One S Controller" and
   "Xbox Series X Controller" as `deviceName`, and GUIDs with a CRC. Check with
   `grep -A3 inputConfig ~/.emulationstation/es_input.cfg` after you ran the wizard on a test pad.
 - [ ] Xbox 360 pad over USB (version 0x0114): works without the wizard. Other revisions and 8BitDo

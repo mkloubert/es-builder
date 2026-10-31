@@ -35,7 +35,7 @@ name is the fallback when the version in the GUID differs (spec section 9).
 The CRC in the GUID is computed from the kernel name (see guid-source).
 SDL keeps the kernel name. SDL_gamepad_db.h has 050000004c050000e60c000000810000.
 
-GUID with CRC (SDL 2.26 and newer, also sdl2-compat on SDL3 in trixie) and without CRC
+GUID with CRC (SDL 2.26 and newer, as on bookworm) and without CRC
 (older SDL), computed with "emulationstation-web guid" from these values:
 guid-source: bus=0x05 vendor=0x054c product=0x0ce6 version=0x8100 name="DualSense Wireless Controller"
 

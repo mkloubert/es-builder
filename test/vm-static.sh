@@ -188,6 +188,7 @@ no_loop_root() { ! grep -q 'root=/dev/loop' "$R/boot/grub/grub.cfg" 2>/dev/null;
 checks_base() {
   local g m k d mods=0 kernels=0 params
 
+  check "Debian 12 bookworm" has_line etc/os-release VERSION_CODENAME=bookworm
   check "User emulationstation (home, bash)" user_ok
   for g in sudo video render input audio bluetooth; do
     check "User emulationstation in group $g" in_group "$g" emulationstation

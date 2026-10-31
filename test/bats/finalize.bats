@@ -172,6 +172,16 @@ need_real_tools() {
   [[ "$output" == *"Failed modules: unknown"* ]]
 }
 
+@test "finalize_report_section: module lines -> heading says exit code 0 means built from source" {
+  load_step
+  local rep="$BATS_TEST_TMPDIR/report.txt"
+  printf 'vice 0 built from source, no binary\nlr-px68k 1 installation failed, see log 30-provision-base\n' >"$rep"
+  run finalize_report_section rpi4 20261031 abc "$rep"
+  [[ "$output" == *"Module report (module, exit code, hint; exit code 0 = installed, but built from source):"* ]]
+  [[ "$output" == *"  vice 0 built from source, no binary"* ]]
+  run ! grep -q 'Failed modules (' <<<"$output"
+}
+
 @test "finalize_image_report: lines of the image file go into a block; nothing without the file" {
   load_step
   local r="$BATS_TEST_TMPDIR/img"
@@ -222,7 +232,7 @@ make_root() {
   printf 'x' >"$r/var/tmp/c"
   printf '#!/bin/sh\nexit 101\n' >"$r/usr/sbin/policy-rc.d"
   ln -s ../run/systemd/resolve/stub-resolv.conf "$r/etc/resolv.conf"
-  printf 'console=tty1 root=PARTUUID=x rootwait resize\n' >"$r/boot/firmware/cmdline.txt"
+  printf 'console=tty1 root=PARTUUID=x rootwait quiet init=/usr/lib/raspberrypi-sys-mods/firstboot\n' >"$r/boot/firmware/cmdline.txt"
 }
 
 @test "finalize_clean_root rpi4: caches, logs, ids, keys, histories, temp files; machine-id uninitialized" {
@@ -279,15 +289,17 @@ make_root() {
   [ "$(cat "$r/etc/machine-id")" = uninitialized ]
 }
 
-@test "finalize_clean_root rpi4: cmdline.txt without 'resize' -> error" {
+@test "finalize_clean_root rpi4: cmdline.txt without the firstboot init -> error" {
   load_step
   local r="$BATS_TEST_TMPDIR/root"
   make_root "$r"
   stub_cmd shred
-  printf 'console=tty1 root=PARTUUID=x rootwait resize=no\n' >"$r/boot/firmware/cmdline.txt"
+  # trixie form ("resize") and a look-alike value do not count
+  printf 'console=tty1 root=PARTUUID=x rootwait resize init=/usr/lib/raspberrypi-sys-mods/firstboot2\n' \
+    >"$r/boot/firmware/cmdline.txt"
   run finalize_clean_root "$r" rpi4 boot/firmware
   [ "$status" -ne 0 ]
-  [[ "$output" == *resize* ]]
+  [[ "$output" == *"init=/usr/lib/raspberrypi-sys-mods/firstboot"* ]]
   rm "$r/boot/firmware/cmdline.txt"
   run finalize_clean_root "$r" rpi4 boot/firmware
   [ "$status" -ne 0 ]

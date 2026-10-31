@@ -18,8 +18,8 @@ Controllers that are not listed here (or that report other IDs) still get the ES
 
 Each file is an `<inputList>` with `<inputConfig type="joystick">` nodes, in the format ES writes:
 
-- Two nodes per device: the SDL GUID with the CRC of the kernel name (SDL 2.26 and newer, and
-  sdl2-compat on SDL3 in Debian trixie) and the GUID without CRC (older SDL). The values are in the
+- Two nodes per device: the SDL GUID with the CRC of the kernel name (SDL 2.26 and newer, as on
+  Debian 12 bookworm) and the GUID without CRC (older SDL). The values are in the
   `guid-source:` lines of the comment; the GUIDs are the output of
   `emulationstation-web guid --bus B --vendor V --product P --version N --name NAME [--crc]`.
   `test/bats/controllers.bats` checks this.
@@ -75,7 +75,7 @@ Findings that differ from the first plan:
 
 Each XML file lists what could not be checked without hardware ("UNVERIFIED - check on
 hardware"). The main points: the version of Xbox One/Series pads over USB, the Bluetooth names,
-the DS4 v1 USB name, and that ES on trixie writes the SDL names.
+the DS4 v1 USB name, and that ES on bookworm writes the SDL names.
 
 ## Sources
 
@@ -84,7 +84,8 @@ the DS4 v1 USB name, and that ES on trixie writes the SDL names.
 - usbhid (version = bcdHID): https://github.com/raspberrypi/linux/blob/rpi-6.18.y/drivers/hid/usbhid/hid-core.c
 - hidp (Bluetooth name and version): https://github.com/raspberrypi/linux/blob/rpi-6.18.y/net/bluetooth/hidp/core.c
 - xpadneo v0.10.5: https://github.com/atar-axis/xpadneo/tree/v0.10.5/hid-xpadneo/src/xpadneo
-- SDL 3.2.10 (Debian trixie libsdl3): https://github.com/libsdl-org/SDL/tree/release-3.2.10/src/joystick
+- SDL 2.26.5 (Debian 12 bookworm libsdl2): https://github.com/libsdl-org/SDL/tree/release-2.26.5/src/joystick
+- SDL 3.2.10 (the names were first checked here): https://github.com/libsdl-org/SDL/tree/release-3.2.10/src/joystick
 - SDL_GameControllerDB: https://github.com/mdqinc/SDL_GameControllerDB
 - RetroPie EmulationStation (HIDAPI off, GUID then name match, vendorId/productId):
   https://github.com/RetroPie/EmulationStation/blob/stable/es-core/src/InputManager.cpp and

@@ -17,30 +17,24 @@
 
 # Base layer Raspberry Pi 4, in the chroot: config.txt, zram swap, first-boot mechanism.
 #
-# First boot of the pinned Raspberry Pi OS Lite trixie 2026-10-06 (ruling R6). Sources:
-# pi-gen b2cd98a9 (per .info of the release), raspberrypi-sys-mods 1:20260914 / userconf-pi 0.19 /
-# rpi-cloud-init-mods (branch pios/trixie) and the package list of the release (.info):
-# - cmdline.txt ends with "... rootwait resize", NO init=/usr/lib/raspberrypi-sys-mods/firstboot
-#   any more. Growing happens in two stages:
-#   1. initramfs-tools/scripts/local-premount/resize_early (raspberrypi-sys-mods): if " resize"
-#      is in /proc/cmdline, parted grows the root partition (only if it is p2) to the end of the
-#      medium; the disk ID is kept.
-#   2. rpi-resize.service (ConditionFirstBoot=yes, WantedBy=sysinit.target, enabled by pi-gen)
-#      pulls in systemd-growfs-root.service (ext4 grows) and disables itself afterwards.
-#   -> "resize" must stay in cmdline.txt, rpi-resize.service must be enabled, and the finished image
-#      needs /etc/machine-id = "uninitialized" (ConditionFirstBoot; pi-gen does it this way, Task 11).
-# - cloud-init 25.2 + rpi-cloud-init-mods are installed (NoCloud, seedfrom /boot/firmware,
-#   with user-data/meta-data/network-config for the Raspberry Pi Imager). cloud-init could
-#   create users and change hostname/network/SSH. It is NOT the resize mechanism (growpart/
-#   resizefs are not needed) -> switched off completely with /etc/cloud/cloud-init.disabled.
-#   Imager customisations therefore have no effect; the replacement is emulationstation.txt (spec 5.4).
+# First boot of the pinned Raspberry Pi OS Lite bookworm 2026-10-06 (spec
+# 2026-10-31-bookworm-design.md 3.3). Sources: pi-gen 850ee74b (per .info of the release) and the
+# package list of the release (.info): raspberrypi-sys-mods 20250930~bookworm, userconf-pi 0.11.
+# - cmdline.txt ends with "... rootwait quiet init=/usr/lib/raspberrypi-sys-mods/firstboot". At the
+#   first boot this script grows the root partition and then removes itself from cmdline.txt.
+#   The init script /etc/init.d/resize2fs_once (from pi-gen) grows the ext4 file system.
+#   -> the init= entry must stay in cmdline.txt, and resize2fs_once stays enabled. There is no
+#   "resize" word and no rpi-resize.service on bookworm.
+# - There is no cloud-init and no rpi-swap on bookworm. The code for them below stays (it does
+#   nothing when /etc/cloud or /etc/rpi/swap.conf is missing), so a later move back to trixie is
+#   easier.
+# - dphys-swapfile is installed (swap file). Spec 5.1 wants zram-tools -> dphys-swapfile is
+#   disabled, otherwise there are two swaps.
 # - userconf-pi: pi-gen calls "rename-user -f -s" -> userconfig.service active, getty@tty1 off,
 #   sshd banner; base-20-user.sh handles this (masks it, removes pi, tty1 on again).
 # - raspberrypi-sys-mods: regenerate_ssh_host_keys.service (first boot, ssh-keygen -A) stays;
 #   sshswitch.service enables ssh only if /boot/firmware/ssh exists - harmless, the port comes from the
 #   app layer (11911), port 22 is not opened.
-# - rpi-swap is installed (zram0 + swap file via systemd-zram-generator). Spec 5.1 wants
-#   zram-tools -> switch rpi-swap off with a drop-in "Mechanism=none", otherwise there are two zram swaps.
 #
 # PROVISION_ROOT (tests only) sets a path prefix; empty in the chroot.
 set -euo pipefail
@@ -72,10 +66,13 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 # --- Root growing at first boot ------------------------------------
+FIRSTBOOT=init=/usr/lib/raspberrypi-sys-mods/firstboot
 [ -f "$CMDLINE_TXT" ] || die "$CMDLINE_TXT is missing"
-grep -qE '(^|[[:space:]])resize([[:space:]]|$)' "$CMDLINE_TXT" ||
-  die "cmdline.txt without 'resize': the root partition would not grow at first boot"
-systemctl enable rpi-resize.service
+grep -qE "(^|[[:space:]])$FIRSTBOOT([[:space:]]|\$)" "$CMDLINE_TXT" ||
+  die "cmdline.txt has no $FIRSTBOOT: the root partition would not grow at first boot"
+if [ -f "$R/etc/init.d/resize2fs_once" ]; then
+  systemctl enable resize2fs_once
+fi
 
 # --- cloud-init off ----------------------------------------------------------
 if [ -d "$R/etc/cloud" ]; then
@@ -83,7 +80,7 @@ if [ -d "$R/etc/cloud" ]; then
   : >"$R/etc/cloud/cloud-init.disabled"
 fi
 
-# --- zram swap (zram-tools), rpi-swap off -------------------------------------
+# --- zram swap (zram-tools), dphys-swapfile and rpi-swap off ------------------
 ZRAM=$R/etc/default/zramswap
 [ -f "$ZRAM" ] || die "$ZRAM is missing (package zram-tools)"
 set_kv() {
@@ -101,6 +98,8 @@ set_kv() {
 set_kv ALGO zstd "$ZRAM"
 set_kv PERCENT 50 "$ZRAM"
 systemctl enable zramswap.service
+log "dphys-swapfile disabled (zram-tools takes over)"
+systemctl disable dphys-swapfile.service
 
 if [ -f "$R/etc/rpi/swap.conf" ]; then
   log "rpi-swap: Mechanism=none (zram-tools takes over)"

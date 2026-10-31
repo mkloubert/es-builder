@@ -34,14 +34,14 @@ The CRC in the GUID is computed from the kernel name (see guid-source).
 SDL names 045e:028e "Xbox 360 Controller" (controller_list.h).
 0x0114 is the version of the Microsoft pad (SDL_gamepad_db.h: 030000005e0400008e02000014010000).
 
-GUID with CRC (SDL 2.26 and newer, also sdl2-compat on SDL3 in trixie) and without CRC
+GUID with CRC (SDL 2.26 and newer, as on bookworm) and without CRC
 (older SDL), computed with "emulationstation-web guid" from these values:
 guid-source: bus=0x03 vendor=0x045e product=0x028e version=0x0114 name="Microsoft X-Box 360 pad"
 
 UNVERIFIED - check on hardware: Other revisions and X-Input clones (8BitDo) may report another bcdDevice
   (for example 0x0110). Then only the name match works.
 UNVERIFIED - check on hardware: ES writes the SDL name "Xbox 360 Controller" (not the kernel name) as deviceName
-  on trixie (SDL 3.2 with sdl2-compat).
+  on bookworm (SDL 2.26 or newer).
 
 Sources:
   https://github.com/raspberrypi/linux/blob/rpi-6.18.y/drivers/input/joystick/xpad.c

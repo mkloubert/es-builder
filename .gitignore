@@ -18,3 +18,4 @@ out/
 secrets/
 webui/internal/web/static/app.css
 build.conf
+.DS_Store

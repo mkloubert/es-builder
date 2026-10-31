@@ -143,7 +143,7 @@ cache_commit "$tmp" "$base"
 cache_prune_old "$TARGET"
 
 if [ -s "$report" ]; then
-  log_warn "Failed modules (report $report):"
+  log_warn "Module report (failed modules, or exit code 0 = built from source; $report):"
   while IFS= read -r line; do log_warn "  $line"; done <"$report"
 else
   log_info "All modules installed (report $report is empty)."

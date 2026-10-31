@@ -111,7 +111,7 @@ finalize_report_section() {
   elif [ ! -s "$modrep" ]; then
     printf 'Failed modules: none\n'
   else
-    printf 'Failed modules (module, exit code, hint):\n'
+    printf 'Module report (module, exit code, hint; exit code 0 = installed, but built from source):\n'
     while IFS= read -r line || [ -n "$line" ]; do
       printf '  %s\n' "$line"
     done <"$modrep"
@@ -142,13 +142,14 @@ finalize_clean_root() {
   [ "$(readlink -f "$r")" != / ] || die "finalize_clean_root on / is not allowed"
   [ -d "$r/etc" ] || die "Not a root file system: $r"
 
-  # rpi4: Pi OS grows the root partition only at the first boot (rpi-resize.service has
-  # ConditionFirstBoot=yes, initramfs resize_early needs "resize" on the kernel command line).
+  # rpi4: Pi OS bookworm grows the root partition only at the first boot, through
+  # init=/usr/lib/raspberrypi-sys-mods/firstboot on the kernel command line (it removes itself
+  # after that boot).
   if [ "$kind" = rpi4 ]; then
     f="$r/$boot/cmdline.txt"
     [ -f "$f" ] || die "cmdline.txt is missing: $f"
-    tr -s ' \t' '\n' <"$f" | grep -qx resize ||
-      die "'resize' is missing in $f; the root partition would not grow at the first boot"
+    tr -s ' \t' '\n' <"$f" | grep -qxF init=/usr/lib/raspberrypi-sys-mods/firstboot ||
+      die "init=/usr/lib/raspberrypi-sys-mods/firstboot is missing in $f; the root partition would not grow at the first boot"
   fi
 
   # build leftovers. build.env holds passwords: overwrite it before it is deleted.
@@ -205,7 +206,7 @@ finalize_clean_root() {
   # the console for every value without a file: locale (/etc/locale.conf), keymap
   # (/etc/vconsole.conf, which Debian does not use) and time zone. The boot would wait there.
   # We set these values ourselves (build.conf at build time, emulationstation.txt at the first
-  # boot), so mask the wizard. Other ConditionFirstBoot units (rpi-resize) still run.
+  # boot), so mask the wizard. Other ConditionFirstBoot units still run.
   mkdir -p "$r/etc/systemd/system"
   ln -sfn /dev/null "$r/etc/systemd/system/systemd-firstboot.service"
 

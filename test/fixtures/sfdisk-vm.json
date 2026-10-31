@@ -2,26 +2,26 @@
    "partitiontable": {
       "label": "gpt",
       "id": "F7C0C1D3-28E5-4FFA-AA1A-35F5AE571D49",
-      "device": "debian-13-nocloud-amd64-20261026-2643.raw",
+      "device": "debian-12-nocloud-amd64-20261026-2643.raw",
       "unit": "sectors",
       "firstlba": 2048,
       "lastlba": 6291422,
       "sectorsize": 512,
       "partitions": [
          {
-            "node": "debian-13-nocloud-amd64-20261026-2643.raw1",
+            "node": "debian-12-nocloud-amd64-20261026-2643.raw1",
             "start": 262144,
             "size": 6027264,
             "type": "4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709",
             "uuid": "4E49BE98-C01F-461F-8646-ECDB941F239D"
          },{
-            "node": "debian-13-nocloud-amd64-20261026-2643.raw14",
+            "node": "debian-12-nocloud-amd64-20261026-2643.raw14",
             "start": 2048,
             "size": 6144,
             "type": "21686148-6449-6E6F-744E-656564454649",
             "uuid": "5675D126-8346-4D93-9F14-F96FBD38BC57"
          },{
-            "node": "debian-13-nocloud-amd64-20261026-2643.raw15",
+            "node": "debian-12-nocloud-amd64-20261026-2643.raw15",
             "start": 8192,
             "size": 253952,
             "type": "C12A7328-F81F-11D2-BA4B-00A0C93EC93B",

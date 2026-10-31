@@ -211,7 +211,13 @@ EOF2
 @test "overlay: nftables.conf has no flush ruleset and allows only 11911/11944" {
   local n="$ROOT/overlay/etc/nftables.conf"
   run ! grep -E '^[[:space:]]*flush ruleset' "$n"
-  grep -qx 'destroy table inet filter' "$n"
+  # no "destroy" (needs Linux 6.3, the Debian 12 VM has 6.1): make the table exist, then delete it
+  run ! grep -q destroy <(grep -v '^#' "$n")
+  local t d
+  t=$(grep -nx 'table inet filter' "$n" | head -n1 | cut -d: -f1)
+  d=$(grep -nx 'delete table inet filter' "$n" | head -n1 | cut -d: -f1)
+  [ -n "$t" ] && [ -n "$d" ]
+  [ $((t + 1)) -eq "$d" ]
   grep -q 'tcp dport { 11911, 11944 } accept' "$n"
   grep -q 'policy drop' "$n"
 }
@@ -220,7 +226,8 @@ EOF2
   local d="$ROOT/overlay/etc/systemd/system/nftables.service.d/keep-f2b.conf"
   [ -f "$d" ]
   grep -qx 'ExecStop=' "$d"
-  grep -qx 'ExecStop=/usr/sbin/nft destroy table inet filter' "$d"
+  grep -qxF 'ExecStop=/usr/sbin/nft "table inet filter; delete table inet filter"' "$d"
+  run ! grep -q destroy <(grep -v '^#' "$d")
   run ! grep -E 'flush ruleset' <(grep -v '^#' "$d")
 }
 

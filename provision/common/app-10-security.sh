@@ -63,9 +63,10 @@ if [ -n "$other" ]; then
 fi
 
 # --- SSH ------------------------------------------------------------------------
-# Debian trixie can run sshd with socket activation: ssh.socket listens on port 22 and
-# ignores "Port" in sshd_config. We want ssh.service with our config (port 11911), so
-# the socket is disabled. The drop-in ssh.socket.d moves it to 11911 if it is enabled by mistake.
+# Debian (bookworm and later) can run sshd with socket activation: ssh.socket (off by default)
+# listens on port 22 and ignores "Port" in sshd_config. We want ssh.service with our config
+# (port 11911), so the socket is disabled. The drop-in ssh.socket.d moves it to 11911 if it is
+# enabled by mistake.
 systemctl disable ssh.socket >/dev/null 2>&1 || true
 systemctl enable ssh.service
 # No host keys in the image: every system makes its own at first boot (ssh-keygen -A).

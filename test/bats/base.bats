@@ -208,9 +208,11 @@ make_cmd_stubs() {
   PATH="$STUBS:$PATH"
 }
 
+# pi_root <dir> : fake bookworm Pi root (pi-gen 850ee74b): firstboot init in cmdline.txt,
+# resize2fs_once, no /etc/rpi (rpi-swap) and no /etc/cloud (cloud-init)
 pi_root() {
   local r=$1
-  mkdir -p "$r/boot/firmware" "$r/etc/default" "$r/etc/cloud" "$r/etc/rpi"
+  mkdir -p "$r/boot/firmware" "$r/etc/default" "$r/etc/init.d"
   cat >"$r/boot/firmware/config.txt" <<'EOF'
 dtparam=audio=on
 dtoverlay=disable-bt
@@ -219,13 +221,13 @@ otg_mode=1
 
 [all]
 EOF
-  echo "console=serial0,115200 console=tty1 root=PARTUUID=27b94958-02 rootfstype=ext4 fsck.repair=yes rootwait resize" \
+  echo "console=serial0,115200 console=tty1 root=PARTUUID=27b94958-02 rootfstype=ext4 fsck.repair=yes rootwait quiet init=/usr/lib/raspberrypi-sys-mods/firstboot" \
     >"$r/boot/firmware/cmdline.txt"
+  printf '#!/bin/sh\n' >"$r/etc/init.d/resize2fs_once"
   printf '# Compression algorithm selection\n#ALGO=lz4\n\n#PERCENT=50\n' >"$r/etc/default/zramswap"
-  printf '[Main]\n#Mechanism=auto\n' >"$r/etc/rpi/swap.conf"
 }
 
-@test "base-10-system.sh: config.txt, zramswap, rpi-swap off, cloud-init off; idempotent" {
+@test "base-10-system.sh: config.txt, zramswap, dphys-swapfile off, firstboot kept; idempotent" {
   make_cmd_stubs systemctl
   local r="$BATS_TEST_TMPDIR/r" snap
   pi_root "$r"
@@ -239,11 +241,13 @@ EOF
   grep -qx 'ALGO=zstd' "$r/etc/default/zramswap"
   grep -qx 'PERCENT=50' "$r/etc/default/zramswap"
   [ "$(grep -c 'ALGO=' "$r/etc/default/zramswap")" -eq 1 ]
-  grep -qx 'Mechanism=none' "$r"/etc/rpi/swap.conf.d/*.conf
-  [ -e "$r/etc/cloud/cloud-init.disabled" ]
-  grep -q 'resize' "$r/boot/firmware/cmdline.txt"
+  [ ! -e "$r/etc/rpi" ]
+  [ ! -e "$r/etc/cloud" ]
+  grep -q 'init=/usr/lib/raspberrypi-sys-mods/firstboot' "$r/boot/firmware/cmdline.txt"
   grep -qx 'systemctl enable zramswap.service' "$CALLS"
-  grep -qx 'systemctl enable rpi-resize.service' "$CALLS"
+  grep -qx 'systemctl disable dphys-swapfile.service' "$CALLS"
+  grep -qx 'systemctl enable resize2fs_once' "$CALLS"
+  run ! grep -q rpi-resize "$CALLS"
 
   snap=$(cd "$r" && find . -type f -exec sha256sum {} + | sort)
   PROVISION_ROOT="$r" run bash "$ROOT/provision/rpi4/base-10-system.sh"
@@ -251,33 +255,53 @@ EOF
   [ "$(cd "$r" && find . -type f -exec sha256sum {} + | sort)" = "$snap" ]
 }
 
-@test "base-10-system.sh: 'resize' missing in cmdline.txt -> abort (root would not grow)" {
+@test "base-10-system.sh: firstboot init missing in cmdline.txt -> abort (root would not grow)" {
   make_cmd_stubs systemctl
   local r="$BATS_TEST_TMPDIR/r"
   pi_root "$r"
-  echo "console=tty1 root=PARTUUID=x rootwait" >"$r/boot/firmware/cmdline.txt"
+  # trixie form: growing through "resize", which bookworm does not know
+  echo "console=tty1 root=PARTUUID=x rootwait resize" >"$r/boot/firmware/cmdline.txt"
   PROVISION_ROOT="$r" run bash "$ROOT/provision/rpi4/base-10-system.sh"
   [ "$status" -ne 0 ]
-  [[ "$output" == *resize* ]]
+  [[ "$output" == *"init=/usr/lib/raspberrypi-sys-mods/firstboot"* ]]
+}
+
+@test "base-10-system.sh: trixie files present (rpi-swap, cloud-init) -> still handled" {
+  make_cmd_stubs systemctl
+  local r="$BATS_TEST_TMPDIR/r"
+  pi_root "$r"
+  mkdir -p "$r/etc/rpi" "$r/etc/cloud"
+  printf '[Main]\n#Mechanism=auto\n' >"$r/etc/rpi/swap.conf"
+  PROVISION_ROOT="$r" run bash "$ROOT/provision/rpi4/base-10-system.sh"
+  [ "$status" -eq 0 ]
+  grep -qx 'Mechanism=none' "$r"/etc/rpi/swap.conf.d/*.conf
+  [ -e "$r/etc/cloud/cloud-init.disabled" ]
 }
 
 # --- provision/common/base-30-retropie.sh (PROVISION_ROOT, stub RetroPie) ------
 
-# Fake RetroPie: creates tmp/build/<m> per module; RP_FAIL modules fail (without clean),
+# Fake RetroPie: creates tmp/build/<m> per module and logs the mode (_binary_ or _source_).
+# RP_FAIL_BIN modules fail in _binary_ mode, RP_FAIL modules in _source_ mode (without clean),
 # all others install and remove their build tree. Logs which
 # build trees still exist when a module starts.
 retropie_root() {
   local r=$1 rp=$1/home/emulationstation/RetroPie-Setup
-  mkdir -p "$rp/.git" "$BATS_TEST_TMPDIR/prov/rpi4"
+  mkdir -p "$rp/.git" "$BATS_TEST_TMPDIR/prov/rpi4" "$BATS_TEST_TMPDIR/prov/vm"
   printf '%s\n' lr-fceumm lr-px68k vice >"$BATS_TEST_TMPDIR/prov/rpi4/modules.list"
+  cp "$BATS_TEST_TMPDIR/prov/rpi4/modules.list" "$BATS_TEST_TMPDIR/prov/vm/modules.list"
   : >"$BATS_TEST_TMPDIR/prov/report.txt"
   cat >"$rp/retropie_packages.sh" <<'EOF2'
 m=${1:-}
 [ -n "$m" ] || exit 0
-echo "rp $m present:[$(ls tmp/build 2>/dev/null | tr '\n' ' ')]" >>"$CALLS"
+mode=${2:-_source_}
+echo "rp $m $mode present:[$(ls tmp/build 2>/dev/null | tr '\n' ' ')]" >>"$CALLS"
 mkdir -p "tmp/build/$m"
 : >"tmp/build/$m/huge.o"
-case " ${RP_FAIL:-} " in *" $m "*) exit 1 ;; esac
+if [ "$mode" = _binary_ ]; then
+  case " ${RP_FAIL_BIN:-} " in *" $m "*) exit 1 ;; esac
+else
+  case " ${RP_FAIL:-} " in *" $m "*) exit 1 ;; esac
+fi
 o=$PROVISION_ROOT/opt/retropie
 case "$m" in
   emulationstation) mkdir -p "$o/supplementary/$m" && printf '#!/bin/sh\n' >"$o/supplementary/$m/$m" && chmod +x "$o/supplementary/$m/$m" ;;
@@ -296,7 +320,7 @@ EOF2
 }
 
 run_retropie() {
-  run env PROVISION_ROOT="$1" CFG_RETROPIE_SETUP_REF=f5ebfba6 CFG_RETROPIE_PLATFORM=rpi4 CFG_TARGET_KIND=rpi4 \
+  run env PROVISION_ROOT="$1" CFG_RETROPIE_SETUP_REF=f5ebfba6 CFG_RETROPIE_PLATFORM=rpi4 CFG_TARGET_KIND="${KIND:-rpi4}" \
     PROVISION_DIR="$BATS_TEST_TMPDIR/prov" PROVISION_REPORT="$BATS_TEST_TMPDIR/prov/report.txt" \
     bash "$ROOT/provision/common/base-30-retropie.sh"
 }
@@ -305,12 +329,12 @@ run_retropie() {
   local r="$BATS_TEST_TMPDIR/r" rp
   retropie_root "$r"
   rp="$r/home/emulationstation/RetroPie-Setup"
-  RP_FAIL=lr-px68k run_retropie "$r"
+  KIND=vm RP_FAIL=lr-px68k run_retropie "$r"
   echo "$output"
   [ "$status" -eq 0 ]
   [ "$(cat "$BATS_TEST_TMPDIR/prov/report.txt")" = "lr-px68k 1 installation failed, see log 30-provision-base" ]
   # when vice starts (after the failure) no build tree is left over
-  grep -qx 'rp vice present:\[\]' "$CALLS"
+  grep -qx 'rp vice _source_ present:\[\]' "$CALLS"
   [ ! -e "$rp/tmp" ]
   [ -d "$r/opt/retropie/emulators/vice" ]
   [ "$(grep -c '^Filesystem' <<<"$output")" -ge 8 ]
@@ -320,7 +344,7 @@ run_retropie() {
   local r="$BATS_TEST_TMPDIR/r" rp
   retropie_root "$r"
   rp="$r/home/emulationstation/RetroPie-Setup"
-  RP_FAIL=emulationstation run_retropie "$r"
+  KIND=vm RP_FAIL=emulationstation run_retropie "$r"
   [ "$status" -ne 0 ]
   [[ "$output" == *"Core module emulationstation failed"* ]]
   [ ! -e "$rp/tmp/build/emulationstation" ]
@@ -330,10 +354,70 @@ run_retropie() {
 @test "base-30-retropie.sh: little space -> hint in the report" {
   local r="$BATS_TEST_TMPDIR/r"
   retropie_root "$r"
-  RP_FAIL=vice DF_AVAIL=1000 run_retropie "$r"
+  KIND=vm RP_FAIL=vice DF_AVAIL=1000 run_retropie "$r"
   [ "$status" -eq 0 ]
   grep -qx 'vice 1 installation failed, little space left on / (1000 KiB free), see log 30-provision-base' \
     "$BATS_TEST_TMPDIR/prov/report.txt"
+}
+
+@test "base-30-retropie.sh rpi4: modules use _binary_, runcommand uses the normal call" {
+  local r="$BATS_TEST_TMPDIR/r"
+  retropie_root "$r"
+  run_retropie "$r"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  grep -qx 'rp lr-fceumm _binary_ present:\[\]' "$CALLS"
+  grep -qx 'rp retroarch _binary_ present:\[\]' "$CALLS"
+  grep -qx 'rp skyscraper _binary_ present:\[\]' "$CALLS"
+  grep -qx 'rp runcommand _source_ present:\[\]' "$CALLS"
+  run ! grep -q 'rp runcommand _binary_' "$CALLS"
+  run ! grep -q '_source_' <(grep -v '^rp runcommand ' "$CALLS")
+  [ ! -s "$BATS_TEST_TMPDIR/prov/report.txt" ]
+}
+
+@test "base-30-retropie.sh rpi4: binary fails, source works -> report line, no build tree left" {
+  local r="$BATS_TEST_TMPDIR/r"
+  retropie_root "$r"
+  RP_FAIL_BIN=vice run_retropie "$r"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/prov/report.txt")" = "vice 0 built from source, no binary" ]
+  grep -qx 'rp vice _source_ present:\[\]' "$CALLS"
+  [ -d "$r/opt/retropie/emulators/vice" ]
+}
+
+@test "base-30-retropie.sh rpi4: binary and source fail -> normal error line" {
+  local r="$BATS_TEST_TMPDIR/r"
+  retropie_root "$r"
+  RP_FAIL_BIN=vice RP_FAIL=vice run_retropie "$r"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/prov/report.txt")" = "vice 1 installation failed, see log 30-provision-base" ]
+}
+
+@test "base-30-retropie.sh rpi4: skyscraper binary fails -> source fallback" {
+  local r="$BATS_TEST_TMPDIR/r"
+  retropie_root "$r"
+  RP_FAIL_BIN=skyscraper run_retropie "$r"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/prov/report.txt")" = "skyscraper 0 built from source, no binary" ]
+}
+
+@test "base-30-retropie.sh rpi4: core module without binary -> abort" {
+  local r="$BATS_TEST_TMPDIR/r"
+  retropie_root "$r"
+  RP_FAIL_BIN=emulationstation run_retropie "$r"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"No RetroPie binary for emulationstation. Check the network and files.retropie.org.uk."* ]]
+  run ! grep -q 'rp emulationstation _source_' "$CALLS"
+  grep -q '^emulationstation 1 ' "$BATS_TEST_TMPDIR/prov/report.txt"
+}
+
+@test "base-30-retropie.sh vm: only source calls" {
+  local r="$BATS_TEST_TMPDIR/r"
+  retropie_root "$r"
+  KIND=vm run_retropie "$r"
+  [ "$status" -eq 0 ]
+  run ! grep -q '_binary_' "$CALLS"
 }
 
 # --- provision/common/app-05-identity.sh (PROVISION_ROOT) --------------------
@@ -477,9 +561,12 @@ good_root() {
     emulationstation:x:1000: >"$r/etc/group"
   ln -s /dev/null "$r/etc/systemd/system/userconfig.service"
   ln -s /usr/lib/systemd/system/getty@.service "$r/etc/systemd/system/getty.target.wants/getty@tty1.service"
-  ln -s /usr/lib/systemd/system/rpi-resize.service "$r/etc/systemd/system/sysinit.target.wants/rpi-resize.service"
+  printf 'NAME="Debian GNU/Linux"\nVERSION_CODENAME=bookworm\n' >"$r/etc/os-release"
+  mkdir -p "$r/etc/init.d" "$r/etc/rc3.d"
+  printf '#!/bin/sh\n' >"$r/etc/init.d/resize2fs_once"
+  ln -s ../init.d/resize2fs_once "$r/etc/rc3.d/S01resize2fs_once"
   printf 'dtparam=audio=on\n[all]\ndtoverlay=vc4-kms-v3d\ndisable_overscan=1\n' >"$r/boot/firmware/config.txt"
-  echo "console=tty1 root=PARTUUID=27b94958-02 rootfstype=ext4 rootwait resize" >"$r/boot/firmware/cmdline.txt"
+  echo "console=tty1 root=PARTUUID=27b94958-02 rootfstype=ext4 rootwait quiet init=/usr/lib/raspberrypi-sys-mods/firstboot" >"$r/boot/firmware/cmdline.txt"
   printf 'ALGO=zstd\nPERCENT=50\n' >"$r/etc/default/zramswap"
   : >"$r/etc/cloud/cloud-init.disabled"
   printf '[Main]\n' >"$r/etc/rpi/swap.conf"
@@ -504,7 +591,7 @@ pi_os_root() {
   printf 'root:*:20000:0:99999:7:::\npi::20000:0:99999:7:::\n' >"$r/etc/shadow"
   printf '%s\n' root:x:0: sudo:x:27:pi video:x:44:pi pi:x:1000: >"$r/etc/group"
   printf 'dtoverlay=vc4-kms-v3d\ndisable_overscan=1\n' >"$r/boot/firmware/config.txt"
-  echo "console=tty1 root=PARTUUID=27b94958-02 rootwait resize" >"$r/boot/firmware/cmdline.txt"
+  echo "console=tty1 root=PARTUUID=27b94958-02 rootwait quiet init=/usr/lib/raspberrypi-sys-mods/firstboot" >"$r/boot/firmware/cmdline.txt"
 }
 
 @test "rpi4-static.sh --root: provisioned root -> PASS only, exit 0" {
@@ -527,6 +614,30 @@ pi_os_root() {
   [[ "$output" == *"FAIL: User pi removed"* ]]
   [[ "$output" == *"FAIL: userconfig.service masked"* ]]
   [[ "$output" == *"FAIL: EmulationStation"* ]]
+}
+
+@test "rpi4-static.sh --root: trixie root (resize, rpi-resize, os-release) or dphys-swapfile on -> FAIL" {
+  local r="$BATS_TEST_TMPDIR/r"
+  good_root "$r"
+  printf 'VERSION_CODENAME=trixie\n' >"$r/etc/os-release"
+  echo "console=tty1 root=PARTUUID=27b94958-02 rootwait resize" >"$r/boot/firmware/cmdline.txt"
+  mkdir -p "$r/etc/systemd/system/multi-user.target.wants"
+  ln -s /lib/systemd/system/dphys-swapfile.service "$r/etc/systemd/system/multi-user.target.wants/dphys-swapfile.service"
+  run bash "$ROOT/test/rpi4-static.sh" --stage base --root "$r"
+  echo "$output"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"FAIL: Debian 12 bookworm"* ]]
+  [[ "$output" == *"FAIL: cmdline.txt: firstboot init"* ]]
+  [[ "$output" == *"FAIL: dphys-swapfile not enabled"* ]]
+}
+
+@test "rpi4-static.sh --root: resize2fs_once present but not enabled -> FAIL" {
+  local r="$BATS_TEST_TMPDIR/r"
+  good_root "$r"
+  rm "$r/etc/rc3.d/S01resize2fs_once"
+  run bash "$ROOT/test/rpi4-static.sh" --stage base --root "$r"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"FAIL: resize2fs_once enabled"* ]]
 }
 
 @test "rpi4-static.sh --root: missing module -> FAIL; with report line -> PASS" {
@@ -738,16 +849,19 @@ EOF2
 
 # --- base-30-retropie.sh: dpkg repair and apt options (stubs) ----------------------------
 
-# rp_root : fake root with a RetroPie-Setup checkout whose retropie_packages.sh is a stub. The stub
+# rp_root : fake root with a RetroPie-Setup checkout whose retropie_packages.sh is a stub. run_rp30
+# uses the source path (KIND=vm) unless KIND is set. The stub
 # logs the module, whether the apt.conf.d file exists and what stdin is; it fails for the modules
 # in $BATS_TEST_TMPDIR/failing. dpkg --audit prints the text of $BATS_TEST_TMPDIR/audit.
 rp_root() {
   RPR="$BATS_TEST_TMPDIR/rpr"
   local rp="$RPR/home/emulationstation/RetroPie-Setup"
-  mkdir -p "$rp/.git" "$RPR/opt/retropie/supplementary/emulationstation" "$BATS_TEST_TMPDIR/prov/rpi4"
+  mkdir -p "$rp/.git" "$RPR/opt/retropie/supplementary/emulationstation" "$BATS_TEST_TMPDIR/prov/rpi4" \
+    "$BATS_TEST_TMPDIR/prov/vm"
   printf '#!/bin/sh\n' >"$RPR/opt/retropie/supplementary/emulationstation/emulationstation"
   chmod +x "$RPR/opt/retropie/supplementary/emulationstation/emulationstation"
   printf 'lr-fceumm\nlr-snes9x\n' >"$BATS_TEST_TMPDIR/prov/rpi4/modules.list"
+  cp "$BATS_TEST_TMPDIR/prov/rpi4/modules.list" "$BATS_TEST_TMPDIR/prov/vm/modules.list"
   : >"$BATS_TEST_TMPDIR/failing"
   : >"$BATS_TEST_TMPDIR/audit"
   cat >"$rp/retropie_packages.sh" <<'EOF2'
@@ -775,7 +889,7 @@ EOF2
 
 run_rp30() {
   run env PROVISION_ROOT="$RPR" CFG_RETROPIE_SETUP_REF=f5ebfba638179631d4619f2b52075dec33d4bca8 \
-    CFG_RETROPIE_PLATFORM=rpi4 CFG_TARGET_KIND=rpi4 PROVISION_DIR="$BATS_TEST_TMPDIR/prov" \
+    CFG_RETROPIE_PLATFORM=rpi4 CFG_TARGET_KIND="${KIND:-vm}" PROVISION_DIR="$BATS_TEST_TMPDIR/prov" \
     PROVISION_REPORT="$BATS_TEST_TMPDIR/prov/report.txt" bash "$ROOT/provision/common/base-30-retropie.sh"
 }
 
@@ -815,6 +929,22 @@ rp lr-snes9x conf=yes stdin=/dev/null" ]
   [[ $output == *"dpkg is still broken after the repair (after lr-fceumm)"* ]]
   run ! grep -q '^rp lr-snes9x' "$CALLS"
   [ ! -e "$RPR/etc/apt/apt.conf.d/90-emulationstation-build" ]
+}
+
+@test "base-30 rpi4: binary fails -> dpkg repair before the source build" {
+  rp_root
+  echo lr-fceumm >"$BATS_TEST_TMPDIR/failing"
+  KIND=rpi4 run_rp30
+  [ "$status" -eq 0 ]
+  # binary try, repair, source try, repair, next module
+  [ "$(sed -n '/^rp lr-fceumm/,$p' "$CALLS" | sed -n '2,9p')" = "dpkg --configure -a
+apt-get -f install -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
+dpkg --audit
+rp lr-fceumm conf=yes stdin=/dev/null
+dpkg --configure -a
+apt-get -f install -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
+dpkg --audit
+rp lr-snes9x conf=yes stdin=/dev/null" ]
 }
 
 @test "base-30: a failed core module aborts and removes the options file" {

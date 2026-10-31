@@ -115,10 +115,10 @@ setup() {
 @test "Paths: base, dl, work" {
   [ "$(cache_base_path vm-amd64)" = "$CACHE_DIR/base-vm-amd64-$(cache_key vm-amd64).img" ]
   [ "$(cache_work_path rpi4)" = "$CACHE_DIR/work/rpi4.img" ]
-  CFG_RPI_IMAGE_URL=https://example.org/a/2026-10-06-raspios-trixie-arm64-lite.img.xz
-  [ "$(cache_dl_path rpi4)" = "$CACHE_DIR/dl/2026-10-06-raspios-trixie-arm64-lite.img" ]
-  CFG_VM_IMAGE_URL_ARM64=https://example.org/b/debian-13-nocloud-arm64.raw
-  [ "$(cache_dl_path vm-arm64)" = "$CACHE_DIR/dl/debian-13-nocloud-arm64.raw" ]
+  CFG_RPI_IMAGE_URL=https://example.org/a/2026-10-06-raspios-bookworm-arm64-lite.img.xz
+  [ "$(cache_dl_path rpi4)" = "$CACHE_DIR/dl/2026-10-06-raspios-bookworm-arm64-lite.img" ]
+  CFG_VM_IMAGE_URL_ARM64=https://example.org/b/debian-12-nocloud-arm64.raw
+  [ "$(cache_dl_path vm-arm64)" = "$CACHE_DIR/dl/debian-12-nocloud-arm64.raw" ]
 }
 
 # Simulates 30-provision-base.sh: creates .tmp and then aborts.
