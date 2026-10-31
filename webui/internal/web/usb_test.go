@@ -787,7 +787,8 @@ func (e *env) renderReview(t *testing.T, ups ...*roms.Upload) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{d: e.d, tpl: tpl, now: time.Now, changes: &Changes{}}
+	s := &Server{d: e.d, now: time.Now, changes: &Changes{}}
+	s.tpl.Store(tpl)
 	v := s.buildReview(ups)
 	v.IDs = "x"
 	w := httptest.NewRecorder()

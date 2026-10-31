@@ -88,6 +88,15 @@ autostart_ok() {
   [ "$(cat "$f")" = 'exec /usr/local/lib/emulationstation/es-session' ] && return 0
   grep -q 'EmulationStation autostart is off' "$f" && ! grep -qE '^[[:space:]]*exec[[:space:]]' "$f"
 }
+# webui_custom_ok : the custom web UI folder is a real folder, everything in it belongs to
+# emulationstation and nothing is a symlink (spec 2026-10-31-webui-custom-design.md 3.2)
+webui_custom_ok() {
+  local d=$R/home/emulationstation/webui-custom uid gid
+  uid=$(passwd_field emulationstation 3) && gid=$(passwd_field emulationstation 4) || return 1
+  [ -d "$d" ] && [ ! -L "$d" ] &&
+    [ -z "$(find "$d" \( -type l -o ! -uid "$uid" -o ! -gid "$gid" \) -print -quit 2>/dev/null)" ]
+}
+ui_dir_set() { grep -qx 'UI_DIR=/home/emulationstation/webui-custom' "$R/etc/emulationstation-web/web.conf" 2>/dev/null; }
 machine_id_unset() { [ "$(cat "$R/etc/machine-id" 2>/dev/null)" = uninitialized ]; }
 no_host_keys() { ! compgen -G "$R/etc/ssh/ssh_host_*" >/dev/null; }
 no_ssh_socket() { [ ! -e "$R/etc/systemd/system/sockets.target.wants/ssh.socket" ]; }
@@ -187,6 +196,8 @@ checks_units() {
   check "fail2ban.service enabled" is_wanted multi-user.target fail2ban.service
   check "emulationstation-firstboot.service enabled" is_wanted multi-user.target emulationstation-firstboot.service
   check "autostart.sh: es-session (yes) or the off hint (no)" autostart_ok
+  check "webui-custom folder: emulationstation, no symlinks" webui_custom_ok
+  check "web.conf: UI_DIR=/home/emulationstation/webui-custom" ui_dir_set
 }
 
 checks_firstboot() {

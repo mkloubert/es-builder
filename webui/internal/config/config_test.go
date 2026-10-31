@@ -241,3 +241,37 @@ func TestUSBMaxFilesRejectsZeroAndGarbage(t *testing.T) {
 		}
 	}
 }
+
+func TestUIDir(t *testing.T) {
+	cases := []struct{ name, conf, want string }{
+		{"default", "", "/home/emulationstation/webui-custom"},
+		{"from home", "HOME_DIR=/h\n", "/h/webui-custom"},
+		{"empty is off", "UI_DIR=\n", ""},
+		{"own path", "HOME_DIR=/h\nUI_DIR=/x\n", "/x"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), "web.conf")
+			if err := os.WriteFile(p, []byte(tc.conf), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			c, err := Load(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.UIDir != tc.want {
+				t.Fatalf("UIDir = %q, want %q", c.UIDir, tc.want)
+			}
+			if err := c.Save(p); err != nil {
+				t.Fatal(err)
+			}
+			got, err := Load(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.UIDir != tc.want {
+				t.Fatalf("after round trip UIDir = %q, want %q", got.UIDir, tc.want)
+			}
+		})
+	}
+}

@@ -24,14 +24,18 @@
 #    web.conf with a temp file and rename in this directory),
 #  - server.key 0600, server.crt 0644, web.conf 0600, all owned by emulationstation,
 #  - web.conf: WEB_USER and WEB_PASSWORD_HASH from "emulationstation-web credentials" (the password
-#    goes through stdin, never as argument or environment), then the ScreenScraper values and SOURCE_URL.
+#    goes through stdin, never as argument or environment), then the ScreenScraper values, SOURCE_URL
+#    and UI_DIR.
 #    The Go defaults are already right for the image (TLS paths, HOME_DIR, ES_SYSTEMS_CFG, LISTEN),
 #    and "credentials" writes all keys, so nothing else is set.
+#  - /home/emulationstation/webui-custom: a copy of webui-custom/ from the provision folder (the
+#    old content is removed), owned by emulationstation, folders 0755, files 0644,
 #  - the service is enabled,
 #  - jq is installed (the helper uses it for usb-list). This script runs in the chroot, so apt-get
 #    works directly. The cached base layer may have old package lists, so update them first.
 # The ScreenScraper password is stored as plain text in web.conf (file mode 0600; Plan 1 design).
-# Idempotent. Test overrides: PROVISION_ROOT (path prefix), BUILD_ENV, PROVISION_LIB, WEB_BIN.
+# Idempotent. Test overrides: PROVISION_ROOT (path prefix), PROVISION_DIR, BUILD_ENV, PROVISION_LIB,
+# WEB_BIN.
 set -euo pipefail
 
 PROVISION_DIR=${PROVISION_DIR:-/root/provision}
@@ -56,6 +60,7 @@ U=emulationstation
 BIN=${WEB_BIN:-/usr/local/bin/emulationstation-web}
 D=/etc/emulationstation-web
 CONF=$R$D/web.conf
+UI=/home/$U/webui-custom
 
 [ -x "$R$BIN" ] || die "Web binary is missing: $BIN (step 40 installs it)"
 [ -f "$R$D/tls/server.key" ] || die "TLS key is missing in $D/tls (step 40 installs it)"
@@ -107,11 +112,25 @@ if [ -n "$sc_user" ]; then webconf_set "$CONF" SCREENSCRAPER_USER "$sc_user"; fi
 if [ -n "$sc_pw" ]; then webconf_set "$CONF" SCREENSCRAPER_PASSWORD "$sc_pw"; fi
 # Always written; an empty value means no source link in the footer (AGPL section 13).
 webconf_set "$CONF" SOURCE_URL "$CFG_SOURCE_URL"
+webconf_set "$CONF" UI_DIR "$UI"
 chown "$U:$U" "$CONF"
 chmod 0600 "$CONF"
 webconf_hash_ok "$CONF" || die "WEB_PASSWORD_HASH in web.conf is not a bcrypt hash"
 webconf_no_plain_password "$CONF" "$web_pw" || die "The web password is in web.conf as plain text"
 log "web.conf written for user $web_user"
+
+# --- Custom web UI files ----------------------------------------------------------
+# The folder matches webui-custom/ of the repository after each build; it is owned by the user,
+# so the owner can change the files over SSH (the System page reloads the templates).
+rm -rf -- "$R$UI"
+mkdir -p "$R$UI"
+if [ -d "$PROVISION_DIR/webui-custom" ]; then
+  cp -R -- "$PROVISION_DIR/webui-custom/." "$R$UI/"
+fi
+chown -R "$U:$U" "$R$UI"
+find "$R$UI" -type d -exec chmod 0755 {} +
+find "$R$UI" -type f -exec chmod 0644 {} +
+log "custom web UI folder $UI ready ($(find "$R$UI" -type f | wc -l) files)"
 
 # --- Enable the service --------------------------------------------------------------
 systemctl enable emulationstation-web.service

@@ -342,19 +342,18 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 
 // block renders a named template of a page set (without layout).
 func (s *Server) block(w http.ResponseWriter, page, name string, data any) {
-	tpl, ok := s.tpl.pages[page]
-	if !ok {
+	b, err := s.render(page, name, data)
+	if errors.Is(err, errTemplateMissing) {
 		http.Error(w, "Template missing", http.StatusInternalServerError)
 		return
 	}
-	var buf strings.Builder
-	if err := tpl.ExecuteTemplate(&buf, name, data); err != nil {
+	if err != nil {
 		s.logf("render %s/%s: %v", page, name, err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(buf.String()))
+	_, _ = w.Write(b)
 }
 
 // --- request helpers -----------------------------------------------------

@@ -61,6 +61,7 @@ type Config struct {
 	MaxZipEntries                        int
 	USBMaxFiles                          int    // most files on one USB stick per import
 	SourceURL                            string // AGPL section 13 source link; empty = no link
+	UIDir                                string // custom web UI files (templates/, static/); empty = off
 	Paths                                Paths
 }
 
@@ -77,8 +78,12 @@ func Default() *Config {
 		SourceURL:       DefaultSourceURL,
 	}
 	c.setHome(defaultHome)
+	c.UIDir = defaultUIDir(defaultHome)
 	return c
 }
+
+// defaultUIDir returns the default custom web UI folder for home.
+func defaultUIDir(home string) string { return home + "/webui-custom" }
 
 // setHome sets Home and derives all dependent paths.
 func (c *Config) setHome(home string) {
@@ -129,6 +134,7 @@ func Load(path string) (*Config, error) {
 
 	if v, ok := vals["HOME_DIR"]; ok && v != "" {
 		c.setHome(v)
+		c.UIDir = defaultUIDir(v)
 	}
 	if v, ok := vals["ES_SYSTEMS_CFG"]; ok && v != "" {
 		c.Paths.ESSystemsCfg = v
@@ -146,6 +152,7 @@ func Load(path string) (*Config, error) {
 	set("TLS_CERT", &c.TLSCert)
 	set("TLS_KEY", &c.TLSKey)
 	set("SOURCE_URL", &c.SourceURL)
+	set("UI_DIR", &c.UIDir)
 
 	num := func(key string) (int64, bool, error) {
 		v, ok := vals[key]
@@ -201,6 +208,7 @@ func (c *Config) Save(path string) error {
 		{"HOME_DIR", c.Paths.Home},
 		{"ES_SYSTEMS_CFG", c.Paths.ESSystemsCfg},
 		{"SOURCE_URL", c.SourceURL},
+		{"UI_DIR", c.UIDir},
 	}
 	var b strings.Builder
 	for _, p := range pairs {

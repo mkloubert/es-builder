@@ -110,8 +110,48 @@ app_stage_provision() {
   else
     mkdir -p "$prov/controllers/custom"
   fi
+  # the owner's own web UI files for app-30-webui.sh
+  app_stage_webui_custom "$ROOT/webui-custom" "$prov/webui-custom"
   cp "$ROOT/builder/lib/log.sh" "$ROOT/builder/lib/config.sh" "$ROOT/builder/lib/webconf.sh" "$prov/lib/"
   app_write_env "$prov/build.env"
+}
+
+# app_stage_webui_custom <src> <dst> : copies templates/ and static/ of the custom web UI folder
+# <src> to <dst> (always created, empty when <src> is missing). .gitkeep and README.md at the top
+# and dot files are skipped. Anything else at the top, a template that is not .html, or an entry
+# that is not a regular file or a folder (for example a symlink) stops the build.
+app_stage_webui_custom() {
+  local src=${1:?} dst=${2:?} e name rel
+  mkdir -p "$dst"
+  [ -d "$src" ] || return 0
+  shopt -s nullglob dotglob
+  for e in "$src"/*; do
+    name=${e##*/}
+    case "$name" in
+      .gitkeep | README.md | .*) continue ;;
+      templates | static)
+        if [ ! -d "$e" ] || [ -L "$e" ]; then
+          die "webui-custom/$name: only templates/ and static/ are allowed."
+        fi
+        ;;
+      *) die "webui-custom/$name: only templates/ and static/ are allowed." ;;
+    esac
+  done
+  shopt -u nullglob dotglob
+  while IFS= read -r -d '' e; do
+    rel=${e#"$src"/}
+    if [ -L "$e" ] || { [ ! -f "$e" ] && [ ! -d "$e" ]; }; then
+      die "webui-custom/$rel must be a regular file."
+    fi
+    if [ -f "$e" ] && [[ "$rel" == templates/* ]] && [[ "$rel" != *.html ]]; then
+      die "webui-custom/$rel: only .html files are allowed in templates/."
+    fi
+  done < <(find "$src/templates" "$src/static" -mindepth 1 -name '.*' -prune -o -print0 2>/dev/null)
+  for name in templates static; do
+    [ -d "$src/$name" ] || continue
+    cp -a "$src/$name" "$dst/$name"
+    find "$dst/$name" -name '.*' -exec rm -rf {} +
+  done
 }
 
 # app_build_web_and_tls <arch> : runs on the build host (builder container) after the overlay is
@@ -134,6 +174,11 @@ app_build_web() {
   src=$(mktemp -d "$tmp/webui-src.XXXXXX")
   cleanup_push rm -rf "$src"
   cp -a "$ROOT/webui/." "$src/"
+  # Tailwind also scans the owner's templates (assets/input.css: @source "../custom/templates")
+  mkdir -p "$src/custom/templates"
+  if [ -d "$ROOT/webui-custom/templates" ]; then
+    cp -a "$ROOT/webui-custom/templates/." "$src/custom/templates/"
+  fi
   sh "$src/scripts/build.sh" "$arch" "$out" ||
     die "Building the web service failed (webui/scripts/build.sh $arch)"
   rm -rf "${src:?}"

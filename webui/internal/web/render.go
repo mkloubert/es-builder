@@ -20,11 +20,13 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 	"unicode/utf8"
@@ -107,6 +109,34 @@ func humanBytes(n uint64) string {
 type templates struct {
 	pages    map[string]*template.Template
 	partials *template.Template
+	builtin  *templates // the built-in set when this set has custom files, else nil
+}
+
+var errTemplateMissing = errors.New("template missing")
+
+// render runs template name of the page set page ("" = the partials) into a buffer. If a set
+// with custom files fails, it logs the error and uses the built-in set, so a custom template
+// that breaks only at run time never locks the owner out (for example of the reload button).
+func (s *Server) render(page, name string, data any) ([]byte, error) {
+	t := s.tpl.Load()
+	run := func(t *templates) ([]byte, error) {
+		set := t.partials
+		if page != "" {
+			set = t.pages[page]
+		}
+		if set == nil {
+			return nil, errTemplateMissing
+		}
+		var buf bytes.Buffer
+		err := set.ExecuteTemplate(&buf, name, data)
+		return buf.Bytes(), err
+	}
+	b, err := run(t)
+	if err != nil && t.builtin != nil {
+		s.logf("custom UI: render %s/%s: %v; using built-in templates", page, name, err)
+		b, err = run(t.builtin)
+	}
+	return b, err
 }
 
 // parseTemplates parses everything once; page sets contain layout + partials + the page.
@@ -142,10 +172,52 @@ func parseTemplates(fsys fs.FS) (*templates, error) {
 	return t, nil
 }
 
+// uiState describes the custom web UI files of the loaded templates.
+type uiState struct {
+	Dir   string // custom folder in use; "" = off (no UI_DIR or no folder)
+	Files int    // regular files below templates/ and static/
+	Err   string // first line of the parse error; the built-in templates are in use
+}
+
+// uiDir returns the configured custom folder, or "" when it is off.
+func (s *Server) uiDir() string {
+	if cfg := s.d.Config(); cfg != nil {
+		return cfg.UIDir
+	}
+	return ""
+}
+
+// loadTemplates parses the templates with the custom folder over the built-in files and
+// swaps them in. If the custom files do not parse, it uses the built-in files only.
+// It panics if the built-in templates are broken (a build-time bug).
+func (s *Server) loadTemplates() uiState {
+	var st uiState
+	dir := s.uiDir()
+	if fi, err := os.Stat(dir); dir != "" && err == nil && fi.IsDir() {
+		st = uiState{Dir: dir, Files: countCustomFiles(dir)}
+	}
+	builtin, err := parseTemplates(assets)
+	if err != nil {
+		panic("web: parse templates: " + err.Error())
+	}
+	tpl := builtin
+	if st.Dir != "" {
+		if custom, err := parseTemplates(newOverlayFS(st.Dir, assets)); err != nil {
+			st.Err, _, _ = strings.Cut(err.Error(), "\n")
+			s.logf("custom UI: %s; using built-in templates", st.Err)
+		} else {
+			custom.builtin = builtin
+			tpl = custom
+		}
+	}
+	s.tpl.Store(tpl)
+	s.ui.Store(&st)
+	return st
+}
+
 // page renders a full page inside the layout.
 func (s *Server) page(w http.ResponseWriter, r *http.Request, name, title string, data any) {
-	tpl, ok := s.tpl.pages[name]
-	if !ok {
+	if _, ok := s.tpl.Load().pages[name]; !ok {
 		http.Error(w, "Template missing", http.StatusInternalServerError)
 		return
 	}
@@ -160,27 +232,27 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request, name, title string
 	if info, _ := s.d.Sysinfo.Collect(s.now()); info.HasCert && info.CertDaysLeft < certWarnDays {
 		p.CertWarning, p.CertDaysLeft = true, info.CertDaysLeft
 	}
-	var buf bytes.Buffer
-	if err := tpl.ExecuteTemplate(&buf, "layout", p); err != nil {
+	b, err := s.render(name, "layout", p)
+	if err != nil {
 		s.logf("render %s: %v", name, err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(buf.Bytes())
+	_, _ = w.Write(b)
 }
 
 // partial renders a named partial template.
 func (s *Server) partial(w http.ResponseWriter, status int, name string, data any) {
-	var buf bytes.Buffer
-	if err := s.tpl.partials.ExecuteTemplate(&buf, name, data); err != nil {
+	b, err := s.render("", name, data)
+	if err != nil {
 		s.logf("render partial %s: %v", name, err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = w.Write(buf.Bytes())
+	_, _ = w.Write(b)
 }
 
 func isHTMX(r *http.Request) bool { return r.Header.Get("HX-Request") == "true" }

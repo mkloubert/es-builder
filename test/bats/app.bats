@@ -425,3 +425,82 @@ EOF2
   [ "$(cat "$fake/webui/internal/web/static/app.css")" = repo-css ]
   [ -z "$(ls -A "$OUT_TMP")" ]
 }
+
+@test "app_stage_webui_custom: copies templates/ and static/, skips .gitkeep, README.md and dot files" {
+  load_step
+  local src="$BATS_TEST_TMPDIR/wc" dst="$BATS_TEST_TMPDIR/out/webui-custom"
+  mkdir -p "$src/templates/partials" "$src/static/img"
+  echo a >"$src/templates/dashboard.html"
+  echo p >"$src/templates/partials/my.html"
+  echo png >"$src/static/img/logo.png"
+  echo x >"$src/static/.DS_Store"
+  : >"$src/.gitkeep"
+  echo doc >"$src/README.md"
+  app_stage_webui_custom "$src" "$dst"
+  [ "$(cat "$dst/templates/dashboard.html")" = a ]
+  [ "$(cat "$dst/templates/partials/my.html")" = p ]
+  [ "$(cat "$dst/static/img/logo.png")" = png ]
+  [ ! -e "$dst/.gitkeep" ]
+  [ ! -e "$dst/README.md" ]
+  [ ! -e "$dst/static/.DS_Store" ]
+}
+
+@test "app_stage_webui_custom: a missing source gives an empty folder" {
+  load_step
+  local dst="$BATS_TEST_TMPDIR/out/webui-custom"
+  app_stage_webui_custom "$BATS_TEST_TMPDIR/none" "$dst"
+  [ -d "$dst" ]
+  [ -z "$(ls -A "$dst")" ]
+}
+
+@test "app_stage_webui_custom: a symlink stops the build" {
+  load_step
+  local src="$BATS_TEST_TMPDIR/wc"
+  mkdir -p "$src/static"
+  ln -s /etc/passwd "$src/static/pw.txt"
+  run app_stage_webui_custom "$src" "$BATS_TEST_TMPDIR/out/webui-custom"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"webui-custom/static/pw.txt must be a regular file."* ]]
+}
+
+@test "app_stage_webui_custom: another top-level entry or a non-HTML template stops the build" {
+  load_step
+  local src="$BATS_TEST_TMPDIR/wc"
+  mkdir -p "$src/other"
+  run app_stage_webui_custom "$src" "$BATS_TEST_TMPDIR/out/a"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"webui-custom/other: only templates/ and static/ are allowed."* ]]
+  rm -rf "$src/other"
+  mkdir -p "$src/templates"
+  echo x >"$src/templates/notes.txt"
+  run app_stage_webui_custom "$src" "$BATS_TEST_TMPDIR/out/b"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"webui-custom/templates/notes.txt: only .html files are allowed in templates/."* ]]
+}
+
+@test "app_stage_provision: puts webui-custom/ into the provision folder" {
+  load_step
+  local root="$BATS_TEST_TMPDIR/root"
+  mkdir -p "$root"
+  CFG_USER_PASSWORD=secret
+  app_stage_provision "$root" rpi4
+  [ -d "$root/root/provision/webui-custom" ]
+}
+
+@test "app_build_web: custom templates are in the copy as custom/templates for Tailwind" {
+  load_step
+  local fake="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$fake/webui/scripts" "$fake/webui/custom/templates" "$fake/webui-custom/templates/partials"
+  : >"$fake/webui/custom/templates/.gitkeep"
+  echo mine >"$fake/webui-custom/templates/partials/my.html"
+  cat >"$fake/webui/scripts/build.sh" <<'EOF2'
+set -eu
+cd "$(dirname "$0")/.."
+cat custom/templates/partials/my.html >"$2"
+EOF2
+  ROOT=$fake
+  OUT_TMP="$BATS_TEST_TMPDIR/tmp"
+  app_build_web arm64 "$BATS_TEST_TMPDIR/bin"
+  [ "$(cat "$BATS_TEST_TMPDIR/bin")" = mine ]
+  [ ! -e "$fake/webui/custom/templates/partials" ]
+}

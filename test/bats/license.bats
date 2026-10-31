@@ -34,3 +34,11 @@ setup() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"x.sh"* ]]
 }
+
+@test "check-license-headers skips webui-custom/ (the owner's own web UI files)" {
+  mkdir -p "$BATS_TEST_TMPDIR/r/scripts" "$BATS_TEST_TMPDIR/r/webui-custom/static"
+  cp "$ROOT/scripts/check-license-headers.sh" "$BATS_TEST_TMPDIR/r/scripts/"
+  echo 'alert(1)' >"$BATS_TEST_TMPDIR/r/webui-custom/static/my.js"
+  run "$BATS_TEST_TMPDIR/r/scripts/check-license-headers.sh"
+  [ "$status" -eq 0 ]
+}

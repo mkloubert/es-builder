@@ -369,11 +369,13 @@ run_app30() {
   : >"$r/etc/systemd/system/emulationstation-web.service"
   printf 'WEB_USER=u\nWEB_PASSWORD=pw123456\n' >"$BATS_TEST_TMPDIR/build.env"
   local c
-  for c in chown systemctl; do printf '#!/bin/bash\nexit 0\n' >"$d/$c"; done
+  printf '#!/bin/bash\nexit 0\n' >"$d/systemctl"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >>"%s/chown.log"\n' "$BATS_TEST_TMPDIR" >"$d/chown"
   printf '#!/bin/bash\n[ "$1" = -s ] && [ "$2" = jq ] && exit %s\nexit 0\n' "$1" >"$d/dpkg"
   printf '#!/bin/bash\nprintf "apt-get %%s [DEBIAN_FRONTEND=%%s]\\n" "$*" "${DEBIAN_FRONTEND:-}" >>"$CALLS"\n' >"$d/apt-get"
   chmod +x "$d"/*
-  PATH="$d:$PATH" PROVISION_ROOT="$r" PROVISION_LIB="$ROOT/builder/lib" BUILD_ENV="$BATS_TEST_TMPDIR/build.env" \
+  mkdir -p "$BATS_TEST_TMPDIR/prov"
+  PATH="$d:$PATH" PROVISION_ROOT="$r" PROVISION_DIR="$BATS_TEST_TMPDIR/prov" PROVISION_LIB="$ROOT/builder/lib" BUILD_ENV="$BATS_TEST_TMPDIR/build.env" \
     WEB_BIN=/usr/local/bin/emulationstation-web run bash "$ROOT/provision/common/app-30-webui.sh"
 }
 
@@ -388,6 +390,40 @@ run_app30() {
   run_app30 0
   [ "$status" -eq 0 ]
   [ ! -s "$CALLS" ]
+}
+
+@test "app-30-webui.sh: custom web UI files go to the home folder (owner, modes, UI_DIR)" {
+  local src="$BATS_TEST_TMPDIR/prov/webui-custom" ui="$BATS_TEST_TMPDIR/root/home/emulationstation/webui-custom"
+  mkdir -p "$src/templates/partials" "$src/static"
+  echo a >"$src/templates/partials/my.html"
+  echo b >"$src/static/x.css"
+  chmod 0600 "$src/static/x.css"
+  mkdir -p "$ui/templates"
+  echo old >"$ui/templates/old.html"
+  run_app30 0
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$ui/templates/partials/my.html")" = a ]
+  [ "$(cat "$ui/static/x.css")" = b ]
+  [ ! -e "$ui/templates/old.html" ]
+  [ "$(stat -c %a "$ui")" = 755 ]
+  [ "$(stat -c %a "$ui/templates/partials")" = 755 ]
+  [ "$(stat -c %a "$ui/static/x.css")" = 644 ]
+  grep -qx -- "-R emulationstation:emulationstation $ui" "$BATS_TEST_TMPDIR/chown.log"
+  grep -qx 'UI_DIR=/home/emulationstation/webui-custom' "$BATS_TEST_TMPDIR/root/etc/emulationstation-web/web.conf"
+  # a second run gives the same result
+  run_app30 0
+  [ "$status" -eq 0 ]
+  [ "$(cat "$ui/static/x.css")" = b ]
+  [ "$(grep -c '^UI_DIR=' "$BATS_TEST_TMPDIR/root/etc/emulationstation-web/web.conf")" = 1 ]
+}
+
+@test "app-30-webui.sh: without custom files the folder is still created and empty" {
+  local ui="$BATS_TEST_TMPDIR/root/home/emulationstation/webui-custom"
+  run_app30 0
+  [ "$status" -eq 0 ]
+  [ -d "$ui" ]
+  [ -z "$(ls -A "$ui")" ]
 }
 
 @test "priv usb-mount: an existing plain directory is not created or changed again" {

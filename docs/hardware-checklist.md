@@ -116,6 +116,11 @@ warning.
   `emulationstation-web`, `ssh` and `fail2ban` is shown.
 - [ ] System page shows the ban list and the unban button works.
 - [ ] Scrape a game with ScreenScraper (needs an account in the settings).
+- [ ] Custom web UI: over SSH, copy `templates/dashboard.html` from the repo to
+  `~/webui-custom/templates/` and change a text. System page, tab "Web UI", "Reload web UI".
+  Expected: the toast "Web UI reloaded.", the card shows "1 custom files in use", the dashboard
+  shows the new text. Then break the file (for example remove `{{end}}`) and reload. Expected: the
+  error card, and the built-in dashboard still works.
 
 ## 6. EmulationStation and games
 

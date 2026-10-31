@@ -271,6 +271,31 @@ Replace `<device>` in them with the IP address or name of the device.
   wizard does not appear. The "reset" button in the web UI does not help in this case. Connect a USB
   keyboard and use the ES menu "Configure Input" for the pad, or fix `xpadneo` and build again.
 
+## Custom web UI
+
+You can change the look and the texts of the web UI with your own files. Every file you do not
+give comes from the web service itself.
+
+- Put the files into `webui-custom/` in the repository, with the same paths as in
+  `webui/internal/web/`: `templates/…` (only `.html`) and `static/…`. Example:
+  `webui-custom/templates/dashboard.html` replaces the dashboard, and `webui-custom/static/logo.png`
+  is served as `/static/logo.png`. Only `templates/` and `static/` are allowed, and symlinks stop
+  the build. See `webui-custom/README.md`.
+- The build copies the folder to `/home/emulationstation/webui-custom/` on the device. You can
+  change the files there over SSH. A new image replaces this folder with the files from the
+  repository.
+- Templates are loaded when the service starts. After a change, open the System page, tab
+  "Web UI", and click "Reload web UI". Static files are read on every request, but browsers keep
+  them for one day: reload the page without the cache.
+- If your templates have an error, the web UI uses the built-in templates, and the System page
+  shows the error.
+- Tailwind classes in your templates get CSS only when the files are in `webui-custom/` at build
+  time. On the device, use the classes that already exist or your own CSS file.
+- Your templates get the same data as the built-in ones. A later update can change this data, so
+  check your templates after an update.
+- `UI_DIR` in `/etc/emulationstation-web/web.conf` (default
+  `/home/emulationstation/webui-custom`) is the folder. An empty value turns custom files off.
+
 ## Import from a USB stick
 
 You can copy games and BIOS files from a USB stick to the device. Nothing happens by itself. You

@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <button type="button" role="tab" @click="tab = 'bans'" :aria-selected="tab === 'bans'" :class="tab === 'bans' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Bans</button>
     <button type="button" role="tab" @click="tab = 'updates'" :aria-selected="tab === 'updates'" :class="tab === 'updates' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Updates</button>
     <button type="button" role="tab" @click="tab = 'power'" :aria-selected="tab === 'power'" :class="tab === 'power' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Power</button>
+    <button type="button" role="tab" @click="tab = 'webui'" :aria-selected="tab === 'webui'" :class="tab === 'webui' ? 'border-red-500 text-red-400' : 'border-transparent text-zinc-400 hover:text-zinc-100'" class="shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Web UI</button>
   </div>
 
   <section x-show="tab === 'logs'" role="tabpanel" aria-label="Logs">
@@ -45,6 +46,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <form method="post" action="/system/update" hx-post="/system/update" hx-swap="none"><button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Update package lists</button></form>
       <form method="post" action="/system/upgrade" hx-post="/system/upgrade" hx-swap="none" hx-confirm="All installed packages will be upgraded. This can take a long time."><button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Upgrade packages</button></form>
     </div>
+  </section>
+
+  <section x-show="tab === 'webui'" role="tabpanel" aria-label="Web UI" style="display:none">
+    {{template "custom_ui" .UI}}
   </section>
 
   <section x-show="tab === 'power'" role="tabpanel" aria-label="Power" style="display:none" class="flex flex-wrap gap-3">

@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -191,9 +190,8 @@ func (s *Server) handleBTEvents(w http.ResponseWriter, r *http.Request) {
 		devs, _ := v.([]bluetooth.Device)
 		out := append([]bluetooth.Device(nil), devs...)
 		bluetooth.SortDevices(out)
-		var sb strings.Builder
-		err := s.tpl.partials.ExecuteTemplate(&sb, "bt_devices", btView{Available: true, Scanning: true, Devices: out})
-		return sb.String(), err
+		b, err := s.render("", "bt_devices", btView{Available: true, Scanning: true, Devices: out})
+		return string(b), err
 	})
 }
 

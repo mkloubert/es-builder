@@ -41,6 +41,7 @@ func (s *Server) systemRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /system/upgrade", s.aptJob("Upgrade packages", priv.Priv.AptUpgrade))
 	mux.HandleFunc("POST /system/reboot", s.power("The system is restarting …", priv.Priv.Reboot))
 	mux.HandleFunc("POST /system/poweroff", s.power("The system is shutting down …", priv.Priv.Poweroff))
+	mux.HandleFunc("POST /system/ui-reload", s.handleUIReload)
 }
 
 type logUnit struct{ Key, Label, Unit string }
@@ -60,6 +61,7 @@ type bansView struct {
 type sysPageView struct {
 	Units []logUnit
 	Bans  bansView
+	UI    uiState
 }
 
 func (s *Server) bans(ctx context.Context) bansView {
@@ -75,7 +77,22 @@ func (s *Server) bans(ctx context.Context) bansView {
 }
 
 func (s *Server) handleSystemPage(w http.ResponseWriter, r *http.Request) {
-	s.page(w, r, "system", "System", sysPageView{Units: logUnits, Bans: s.bans(r.Context())})
+	s.page(w, r, "system", "System", sysPageView{Units: logUnits, Bans: s.bans(r.Context()), UI: *s.ui.Load()})
+}
+
+// handleUIReload parses the templates again (custom folder over the built-in files).
+func (s *Server) handleUIReload(w http.ResponseWriter, r *http.Request) {
+	st := s.loadTemplates()
+	if !isHTMX(r) {
+		redirect(w, r, "/system")
+		return
+	}
+	if st.Err != "" {
+		toast(w, "Custom templates have an error. The built-in web UI is in use.")
+	} else {
+		toast(w, "Web UI reloaded.")
+	}
+	s.partial(w, http.StatusOK, "custom_ui", st)
 }
 
 func (s *Server) handleBansPartial(w http.ResponseWriter, r *http.Request) {

@@ -43,6 +43,10 @@ setup() {
     ln -s "/lib/systemd/system/$u.service" "$R/etc/systemd/system/multi-user.target.wants/$u.service"
   done
   echo uninitialized >"$R/etc/machine-id"
+  # custom web UI folder and its web.conf key (spec 2026-10-31-webui-custom-design.md 3.2)
+  mkdir -p "$R/home/emulationstation/webui-custom/static" "$R/etc/emulationstation-web"
+  echo x >"$R/home/emulationstation/webui-custom/static/a.css"
+  printf 'WEB_USER=u\nUI_DIR=/home/emulationstation/webui-custom\n' >"$R/etc/emulationstation-web/web.conf"
   cp "$ROOT/overlay/boot-template/emulationstation.txt.example" "$R/boot/firmware/"
   cp "$ROOT/overlay/boot-template/emulationstation.txt.example" "$R/boot/efi/"
   printf 'TARGET_KIND=rpi4\nBOOT_DIR=/boot/firmware\n' >"$R/usr/local/lib/emulationstation/firstboot.conf"
@@ -256,4 +260,18 @@ shared_lines() {
   run shared_lines rpi4-static.sh --report "$BATS_TEST_TMPDIR/report.txt"
   [[ $output == *"WARN: USB: kernel 6.12.0-test has no ntfs3"* ]]
   [[ $output != *"FAIL:"* ]]
+}
+
+@test "shared checks: the custom web UI folder and UI_DIR are checked" {
+  run shared_lines rpi4-static.sh
+  [[ $output == *"PASS: webui-custom folder: emulationstation, no symlinks"* ]]
+  [[ $output == *"PASS: web.conf: UI_DIR=/home/emulationstation/webui-custom"* ]]
+  ln -s /etc/passwd "$R/home/emulationstation/webui-custom/static/pw"
+  sed -i '/^UI_DIR=/d' "$R/etc/emulationstation-web/web.conf"
+  run shared_lines vm-static.sh --arch amd64
+  [[ $output == *"FAIL: webui-custom folder: emulationstation, no symlinks"* ]]
+  [[ $output == *"FAIL: web.conf: UI_DIR=/home/emulationstation/webui-custom"* ]]
+  rm -rf "$R/home/emulationstation/webui-custom"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"FAIL: webui-custom folder: emulationstation, no symlinks"* ]]
 }

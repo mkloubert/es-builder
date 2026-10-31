@@ -67,8 +67,9 @@ type Deps struct {
 // Server holds the handler state.
 type Server struct {
 	d   Deps
-	tpl *templates
-	mu  sync.Mutex // serializes log writes
+	tpl atomic.Pointer[templates] // swapped by the reload button
+	ui  atomic.Pointer[uiState]   // custom web UI state of the loaded templates
+	mu  sync.Mutex                // serializes log writes
 	now func() time.Time
 
 	changes  *Changes    // pending rename/delete changes of the ROM library
@@ -103,18 +104,21 @@ func securityHeaders(next http.Handler) http.Handler {
 // so that 401/403 responses carry the headers too.
 // It panics if the embedded templates are broken (a build-time bug).
 func NewHandler(d Deps) http.Handler {
-	tpl, err := parseTemplates(assets)
-	if err != nil {
-		panic("web: parse templates: " + err.Error())
-	}
-	s := &Server{d: d, tpl: tpl, now: time.Now, changes: &Changes{}}
+	_, h := newServer(d)
+	return h
+}
+
+// newServer is NewHandler that also returns the server (for tests).
+func newServer(d Deps) (*Server, http.Handler) {
+	s := &Server{d: d, now: time.Now, changes: &Changes{}}
+	s.loadTemplates()
 	mux := http.NewServeMux()
 	s.routes(mux)
-	return gzipHandler(securityHeaders(http.NewCrossOriginProtection().Handler(auth.Middleware(d.Config, d.LogW, mux))))
+	return s, gzipHandler(securityHeaders(http.NewCrossOriginProtection().Handler(auth.Middleware(d.Config, d.LogW, mux))))
 }
 
 func (s *Server) routes(mux *http.ServeMux) {
-	static, err := fs.Sub(assets, "static")
+	static, err := fs.Sub(newOverlayFS(s.uiDir(), assets), "static")
 	if err != nil {
 		panic(err)
 	}
