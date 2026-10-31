@@ -111,10 +111,18 @@ usb_list() {
     return 1
   fi
   root_src=${root_src%%\[*}
+  # lsblk prints a flat list (partitions with "pkname", no "children") when the NAME column is
+  # not asked for; nest builds the children from pkname then (spec usb-import 9)
   printf '%s' "$json" | jq -r --arg root "$root_src" --arg mnt "$USB_MOUNT_DIR" '
     def subtree: [., ((.children // [])[] | subtree)] | flatten;
     def has_root: any(subtree[]; .path == $root or any((.mountpoints // [])[]; . == "/"));
-    (.blockdevices // [])[]
+    def nest: (.blockdevices // []) as $all
+      | if any($all[]; has("children")) then $all
+        else [$all[] | select(.pkname == null)
+              | . as $d | (($d.path // "") | sub("^/dev/"; "")) as $n
+              | $d + {children: [$all[] | select(.pkname != null and .pkname == $n)]}]
+        end;
+    nest[]
     | select(.tran == "usb" and (has_root | not))
     | . as $disk
     | subtree[]

@@ -32,6 +32,7 @@ import (
 // statusView is the data of the status partial.
 type statusView struct {
 	State      es.State
+	Session    bool // es-session runs, so the ES buttons work
 	ROMName    string
 	SystemName string
 	Info       sysinfo.Info
@@ -49,9 +50,11 @@ func (s *Server) dashboardRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) status() statusView {
-	v := statusView{State: s.d.ES.State()}
+	v := statusView{State: s.d.ES.State(), Session: s.d.ES.SessionRunning()}
 	if v.State.Kind == "game" {
-		v.ROMName = filepath.Base(v.State.ROM)
+		if v.State.ROM != "" {
+			v.ROMName = filepath.Base(v.State.ROM)
+		}
 		v.SystemName = v.State.System
 		if s.d.Systems != nil {
 			if sys, ok := systems.ByName(s.d.Systems(), v.State.System); ok && sys.FullName != "" {
@@ -86,6 +89,8 @@ func actionError(err error) (int, string) {
 	switch {
 	case errors.Is(err, es.ErrNoSession):
 		return http.StatusConflict, "EmulationStation is not running on the device. Start it on the device screen."
+	case errors.Is(err, es.ErrUnmanaged):
+		return http.StatusConflict, `EmulationStation runs, but not in its session. Quit it on the device, then start it again with "emulationstation" on the device screen.`
 	case errors.Is(err, es.ErrStopTimeout):
 		return http.StatusGatewayTimeout, "EmulationStation did not stop in time."
 	case errors.Is(err, es.ErrNotRunning):

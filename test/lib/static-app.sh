@@ -233,6 +233,7 @@ checks_units() {
   check "shell tools: mc is in the image" in_image mc
   check "shell tools: ifconfig (net-tools) is in the image" in_image ifconfig
   check "profile.d: sbin folders in PATH for login shells" test -s "$R/etc/profile.d/20-emulationstation-sbin.sh"
+  check "profile.d: emulationstation on tty1 starts the session" grep -q 'exec "${ES_SESSION:-/usr/local/lib/emulationstation/es-session}"' "$R/etc/profile.d/30-emulationstation-session.sh"
 }
 
 checks_firstboot() {

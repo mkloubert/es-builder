@@ -491,6 +491,80 @@ func TestDashboardOff(t *testing.T) {
 	}
 }
 
+// procList is a fixed es.Procs for the status tests.
+type procList []es.Proc
+
+func (p procList) List() ([]es.Proc, error) { return p, nil }
+
+const (
+	testRunCommand = "/opt/retropie/supplementary/runcommand/runcommand.sh"
+	testESBinary   = "/opt/retropie/supplementary/emulationstation/emulationstation"
+)
+
+func TestDashboardMenuGame(t *testing.T) {
+	d, _ := newDeps(t)
+	writeRun(t, d, "state", "es\n")
+	uid := os.Getuid()
+	d.ES.Procs = procList{
+		{PID: 100, PPID: 1, UID: uid, Exe: testESBinary},
+		{PID: 102, PPID: 100, UID: uid, Args: []string{"/bin/bash", testRunCommand, "0", "_SYS_", "c64", "/r/FOO.d64"}},
+	}
+	d.ES.InfoFile = filepath.Join(d.ES.RunDir, "runcommand.info")
+	if err := os.WriteFile(d.ES.InfoFile, []byte("c64\nvice-x64\n/r/FOO.d64\ncmd\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w := serve(NewHandler(d), authed(httptest.NewRequest("GET", "/partials/status", nil)))
+	b := w.Body.String()
+	for _, want := range []string{"Game running", "FOO.d64", "Started from the EmulationStation menu.", "/game/stop", "/es/restart"} {
+		if !strings.Contains(b, want) {
+			t.Errorf("missing %q in %s", want, b)
+		}
+	}
+}
+
+func TestDashboardMenuGameWithoutNames(t *testing.T) {
+	d, _ := newDeps(t)
+	writeRun(t, d, "state", "es\n")
+	noSession(t, d.ES.RunDir)
+	d.ES.Procs = procList{{PID: 102, PPID: 1, UID: os.Getuid(), Args: []string{"/bin/bash", testRunCommand}}}
+	d.ES.InfoFile = filepath.Join(d.ES.RunDir, "missing.info")
+	w := serve(NewHandler(d), authed(httptest.NewRequest("GET", "/partials/status", nil)))
+	b := w.Body.String()
+	if !strings.Contains(b, "Game running") || !strings.Contains(b, "/game/stop") {
+		t.Fatalf("body=%s", b)
+	}
+	if strings.Contains(b, `title="."`) {
+		t.Error("an empty ROM is shown as \".\"")
+	}
+	for _, p := range []string{"/es/start", "/es/stop", "/es/restart"} {
+		if strings.Contains(b, p) {
+			t.Errorf("button %s shown without a session", p)
+		}
+	}
+}
+
+func TestDashboardUnmanaged(t *testing.T) {
+	d, _ := newDeps(t)
+	noSession(t, d.ES.RunDir)
+	d.ES.Procs = procList{{PID: 100, PPID: 1, UID: os.Getuid(), Exe: testESBinary}}
+	w := serve(NewHandler(d), authed(httptest.NewRequest("GET", "/partials/status", nil)))
+	b := w.Body.String()
+	if !strings.Contains(b, "EmulationStation runs outside its session") || strings.Contains(b, "EmulationStation is off") {
+		t.Fatalf("body=%s", b)
+	}
+	for _, p := range []string{"/es/start", "/es/stop", "/es/restart", "/game/stop"} {
+		if strings.Contains(b, p) {
+			t.Errorf("button %s shown for an ES outside the session", p)
+		}
+	}
+	req := authed(httptest.NewRequest("POST", "/es/stop", nil))
+	req.Header.Set("HX-Request", "true")
+	w = serve(NewHandler(d), req)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Header().Get("HX-Trigger"), "not in its session") {
+		t.Fatalf("stop: code=%d trigger=%q", w.Code, w.Header().Get("HX-Trigger"))
+	}
+}
+
 func TestESStartWithoutSession(t *testing.T) {
 	d, _ := newDeps(t)
 	noSession(t, d.ES.RunDir)

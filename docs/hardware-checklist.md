@@ -40,9 +40,13 @@ Before you start:
   theme. No wizard, no login prompt, no manual step. Expected: the ES start screen on the TV.
 - [ ] With `ES_AUTOSTART=no` (default): tty1 shows a shell (user `emulationstation`) and the hint
   "EmulationStation autostart is off". The web UI dashboard shows "EmulationStation is off" with
-  no ES buttons. Upload and controller changes work at once. Typing
-  `exec /usr/local/lib/emulationstation/es-session` starts ES; the web UI then shows "running",
-  and the ES buttons work.
+  no ES buttons. Upload and controller changes work at once. Typing `emulationstation` on tty1
+  (or `exec /usr/local/lib/emulationstation/es-session`) starts ES in its session; the web UI
+  then shows "running", and the ES buttons work. `emulationstation --help` still runs the normal
+  command.
+- [ ] ES started over SSH (`emulationstation` in an SSH shell, with a screen): the web UI shows
+  "EmulationStation runs outside its session" with no ES buttons, and "Apply" of an upload says
+  "EmulationStation runs, but not in its session …".
 - [ ] The root file system grows to the size of the card. `df -h /` shows about the card size.
 - [ ] `cat /etc/machine-id` shows 32 hex digits (not `uninitialized`). SSH host keys exist in
   `/etc/ssh/ssh_host_*`.
@@ -156,6 +160,9 @@ warning.
   that "Quit emulator" there returns to ES. Write down which button is RETURN (button 2 in SDL
   order): at the `READY.` prompt it moves the cursor to the next line.
 - [ ] N64 and PSP: they depend on the game. Try one game of each. A slow game is not a bug (README).
+- [ ] Start a game from the ES menu (for example C64). Expected: the dashboard shows "Game running"
+  with the ROM name and "Started from the EmulationStation menu." "Stop game" ends the emulator,
+  ES comes back, and ES itself was not restarted (the ES menu position stays).
 - [ ] Start a game from the web UI. Expected: the game runs on the TV and "stop game" in the web UI
   ends it and ES returns. (The game process group and `runcommand` on a real terminal were only
   tested with a simulated terminal.)
@@ -263,6 +270,10 @@ See the design in `docs/superpowers/specs/2026-10-28-usb-import-design.md`. You 
 
 - [ ] After a build, `test/rpi4-static.sh --stage app` and `test/vm-static.sh --stage app` show no
   FAIL for "USB" (a WARN for `ntfs3` means NTFS sticks do not work on that kernel).
+- [ ] A FAT32 stick appears on the USB page (Pi and VM). `sudo /usr/local/lib/emulationstation/priv
+  usb-list` prints one line for it. (Before the fix of spec usb-import 9, the flat `lsblk` output
+  of Debian 12 gave an empty list.) In UTM, attach the `.img` as a USB drive that is **not**
+  "Removable" (a removable drive is a CD drive: `/dev/sr0`, no file system).
 - [ ] FAT32 stick: plug it in, open "USB" in the web UI, click "Refresh". The stick shows with its
   label and size. The first "Import" prepares the stick. Put a ROM and a BIOS file on it on a PC,
   import again, commit on the review page. The game shows up in ES.

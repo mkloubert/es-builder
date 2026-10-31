@@ -24,8 +24,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         <span class="h-3 w-3 flex-none rounded-full bg-accent shadow-[0_0_12px_var(--color-accent)]" aria-hidden="true"></span>
         <div class="min-w-0">
           <p class="font-display text-[28px] leading-none tracking-[0.02em]">Game running</p>
-          <p class="mt-1 truncate text-sm text-fg" title="{{.ROMName}}">{{.ROMName}}</p>
+          {{if .ROMName}}<p class="mt-1 truncate text-sm text-fg" title="{{.ROMName}}">{{.ROMName}}</p>{{end}}
           {{if .SystemName}}<p class="label-mono mt-1">{{.SystemName}}</p>{{end}}
+          {{if .State.Menu}}<p class="mt-1 text-sm text-muted">Started from the EmulationStation menu.</p>{{end}}
         </div>
       {{else if eq .State.Kind "es"}}
         <span class="h-3 w-3 flex-none rounded-full bg-ok shadow-[0_0_12px_var(--color-ok)]" aria-hidden="true"></span>
@@ -33,6 +34,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       {{else if eq .State.Kind "stopped"}}
         <span class="h-3 w-3 flex-none rounded-full bg-dim" aria-hidden="true"></span>
         <p class="font-display text-[28px] leading-none tracking-[0.02em]">EmulationStation stopped</p>
+      {{else if eq .State.Kind "unmanaged"}}
+        <span class="h-3 w-3 flex-none rounded-full bg-warn" aria-hidden="true"></span>
+        <div class="min-w-0">
+          <p class="font-display text-[28px] leading-none tracking-[0.02em]">EmulationStation runs outside its session</p>
+          <p class="mt-1 text-sm text-muted">The web UI cannot control it. Quit it and start it again on the device screen.</p>
+        </div>
       {{else if eq .State.Kind "off"}}
         <span class="h-3 w-3 flex-none rounded-full bg-line-strong" aria-hidden="true"></span>
         <div class="min-w-0">
@@ -44,13 +51,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         <p class="font-display text-[28px] leading-none tracking-[0.02em]">Status unknown</p>
       {{end}}
     </div>
-    {{if ne .State.Kind "off"}}
+    {{if or (eq .State.Kind "game") .Session}}
     <div class="mt-6 flex flex-wrap gap-3">
       {{if eq .State.Kind "game"}}
       <form method="post" action="/game/stop" hx-post="/game/stop" hx-target="#status" hx-swap="outerHTML" hx-confirm="The running game will be stopped. Unsaved progress will be lost.">
         <button class="btn btn-danger">{{icon "x"}}Stop game</button>
       </form>
       {{end}}
+      {{if .Session}}
       <form method="post" action="/es/restart" hx-post="/es/restart" hx-target="#status" hx-swap="outerHTML" hx-confirm="EmulationStation is restarting.">
         <button class="btn">{{icon "refresh-cw"}}Restart ES</button>
       </form>
@@ -62,6 +70,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <form method="post" action="/es/stop" hx-post="/es/stop" hx-target="#status" hx-swap="outerHTML" hx-confirm="EmulationStation will be stopped and stays off until you start it again.">
         <button class="btn">{{icon "power"}}Stop ES</button>
       </form>
+      {{end}}
       {{end}}
     </div>
     {{end}}

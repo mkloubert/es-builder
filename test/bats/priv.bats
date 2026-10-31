@@ -210,6 +210,22 @@ usb_stubs() {
   [ "$output" = "$(printf '/dev/sda1\tvfat\t15999000000\tRETRO')" ]
 }
 
+@test "priv usb-list: flat lsblk output (no NAME column, Debian 12) lists the stick (spec usb-import 9)" {
+  need_nonroot
+  usb_stubs flat-usb-stick /dev/vda1
+  run "$PRIV" usb-list
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf '/dev/sda1\tvfat\t2146435072\tMEINSTICK')" ]
+}
+
+@test "priv usb-list: flat lsblk output never lists the USB root disk, a bare stick is listed" {
+  need_nonroot
+  usb_stubs flat-usb-root /dev/sda2
+  run "$PRIV" usb-list
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf '/dev/sdb\texfat\t64023257088\tGAMES')" ]
+}
+
 @test "priv usb-list: the root disk on USB is never listed, other sticks are" {
   need_nonroot
   usb_stubs usb-root /dev/sda2

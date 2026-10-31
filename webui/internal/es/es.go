@@ -23,8 +23,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +41,7 @@ var (
 	ErrNoGame      = errors.New("es: no game process known")
 	ErrBusy        = errors.New("es: another operation is in progress")
 	ErrNoSession   = errors.New("es: no EmulationStation session on the device")
+	ErrUnmanaged   = errors.New("es: EmulationStation runs outside its session")
 )
 
 const (
@@ -49,22 +52,47 @@ const (
 	stateGame       = "game"
 	stateStopped    = "stopped"
 	stateUnknown    = "unknown"
-	stateOff        = "off" // no es-session runs (for example ES_AUTOSTART=no)
+	stateOff        = "off"       // no es-session runs (for example ES_AUTOSTART=no)
+	stateUnmanaged  = "unmanaged" // no es-session, but the ES binary runs (started over SSH)
+
+	defaultInfoFile   = "/dev/shm/runcommand.info"
+	defaultRunCommand = "/opt/retropie/supplementary/runcommand/runcommand.sh"
+	defaultESBinary   = "/opt/retropie/supplementary/emulationstation/emulationstation"
+
+	// infoSlack: runcommand.info may be written a little before the process start is
+	// rounded (clock ticks); an older file belongs to an earlier game
+	infoSlack    = 2 * time.Second
+	maxInfoBytes = 64 << 10
 )
 
-// State is the parsed content of the state file.
+// State is the parsed content of the state file, or what the process list shows
+// (spec 2026-10-31-es-session-detect-design.md).
 type State struct {
-	Kind   string // "es" | "game" | "stopped" | "unknown" | "off"
+	Kind   string // "es" | "game" | "stopped" | "unknown" | "off" | "unmanaged"
 	System string
 	ROM    string
+	Menu   bool // the game was started from the ES menu (not by the web UI)
 }
 
-// Controller talks to the ES wrapper via files in RunDir.
+// Controller talks to the ES wrapper via files in RunDir. With Procs it also finds games
+// started from the ES menu and an ES that runs outside its session; nil Procs turns that off.
 type Controller struct {
 	RunDir      string
 	StopTimeout time.Duration // default 30s
+	Procs       Procs
+	InfoFile    string // default /dev/shm/runcommand.info
+	RunCommand  string // default RetroPie's runcommand.sh
+	ESBinary    string // default RetroPie's ES binary (the ES_BIN of es-session)
 
-	opMu sync.Mutex // serializes WithESStopped, Start, Stop, Restart, Launch
+	gameGrace time.Duration // tests only; default gameTermGrace
+	opMu      sync.Mutex    // serializes WithESStopped, Start, Stop, Restart, Launch
+}
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
 }
 
 func (c *Controller) path(name string) string { return filepath.Join(c.RunDir, name) }
@@ -82,12 +110,36 @@ func (c *Controller) SessionRunning() bool {
 	return pid != 0 && alive(pid)
 }
 
-// State reads the state file; missing or malformed content yields "unknown". Without a
-// session it is "off" and the state file is not read.
+// State returns what runs. Order: a game the web UI started (state file), a game from the
+// ES menu (process list), the state file of the session, an ES outside the session
+// ("unmanaged"), else "off". Missing or malformed state file content yields "unknown".
 func (c *Controller) State() State {
-	if !c.SessionRunning() {
-		return State{Kind: stateOff}
+	session := c.SessionRunning()
+	var file State
+	if session {
+		file = c.fileState()
+		if file.Kind == stateGame {
+			return file
+		}
 	}
+	if c.Procs != nil {
+		if procs, err := c.Procs.List(); err == nil {
+			if g, ok := c.menuGame(procs); ok {
+				return g.state
+			}
+			if !session && c.esUnmanaged(procs) {
+				return State{Kind: stateUnmanaged}
+			}
+		}
+	}
+	if session {
+		return file
+	}
+	return State{Kind: stateOff}
+}
+
+// fileState parses the state file of the session.
+func (c *Controller) fileState() State {
 	b, err := os.ReadFile(c.path("state"))
 	if err != nil {
 		return State{Kind: stateUnknown}
@@ -176,6 +228,9 @@ func (c *Controller) Stop() error {
 	}
 	defer c.opMu.Unlock()
 	if !c.SessionRunning() {
+		if c.State().Kind == stateUnmanaged {
+			return ErrUnmanaged
+		}
 		return nil // nothing runs, so there is nothing to stop
 	}
 	if c.State().Kind == stateGame {
@@ -266,6 +321,9 @@ func (c *Controller) Launch(system, romAbs string) error {
 		return errors.New("es: system and rom must not be empty")
 	}
 	if !c.SessionRunning() {
+		if c.State().Kind == stateUnmanaged {
+			return ErrUnmanaged
+		}
 		return ErrNoSession
 	}
 	if c.State().Kind == stateGame {
@@ -301,10 +359,15 @@ func (c *Controller) Launch(system, romAbs string) error {
 	return nil
 }
 
-// StopGame terminates the game's process group, escalating to SIGKILL.
+// StopGame ends the running game. A game of the web UI: its process group, escalating to
+// SIGKILL. A game from the ES menu: see stopMenuGame.
 func (c *Controller) StopGame() error {
-	if c.State().Kind != stateGame {
+	st := c.State()
+	if st.Kind != stateGame {
 		return ErrNoGame
+	}
+	if st.Menu {
+		return c.stopMenuGame()
 	}
 	pgid := c.readPID("game.pid")
 	if pgid == 0 {
@@ -348,6 +411,12 @@ func (c *Controller) WithESStopped(ctx context.Context, fn func() error) error {
 	c.opMu.Lock()
 	defer c.opMu.Unlock()
 	if !c.SessionRunning() {
+		switch c.State().Kind {
+		case stateGame:
+			return ErrGameRunning
+		case stateUnmanaged:
+			return ErrUnmanaged
+		}
 		return c.withHoldOnly(fn)
 	}
 	if c.State().Kind == stateGame {
@@ -386,4 +455,165 @@ func (c *Controller) withHoldOnly(fn func() error) error {
 		return err
 	}
 	return fnErr
+}
+
+// menuGameInfo is a game started from the ES menu: the runcommand process and the state.
+type menuGameInfo struct {
+	pid   int
+	state State
+}
+
+// menuGame finds runcommand of the own user in procs: a process with the exact argument
+// RunCommand whose parent is not such a process too (the "sh -c" line of ES has the whole
+// command in one argument, so it never matches). The lowest PID wins.
+func (c *Controller) menuGame(procs []Proc) (menuGameInfo, bool) {
+	rc := orDefault(c.RunCommand, defaultRunCommand)
+	uid := os.Getuid()
+	match := map[int]Proc{}
+	for _, p := range procs {
+		if p.UID != uid || p.PID <= 1 {
+			continue
+		}
+		for _, a := range p.Args {
+			if a == rc {
+				match[p.PID] = p
+				break
+			}
+		}
+	}
+	pids := make([]int, 0, len(match))
+	for pid, p := range match {
+		if _, parent := match[p.PPID]; !parent {
+			pids = append(pids, pid)
+		}
+	}
+	if len(pids) == 0 {
+		return menuGameInfo{}, false
+	}
+	sort.Ints(pids)
+	p := match[pids[0]]
+	system, rom := c.readInfo(p.Start)
+	return menuGameInfo{pid: p.PID, state: State{Kind: stateGame, System: system, ROM: rom, Menu: true}}, true
+}
+
+// readInfo returns system (line 1) and ROM (line 3) of runcommand.info, or empty strings when
+// the file is missing or older than the runcommand process (start; zero = unknown).
+func (c *Controller) readInfo(start time.Time) (system, rom string) {
+	name := orDefault(c.InfoFile, defaultInfoFile)
+	fi, err := os.Lstat(name)
+	if err != nil || !fi.Mode().IsRegular() {
+		return "", ""
+	}
+	if !start.IsZero() && fi.ModTime().Before(start.Add(-infoSlack)) {
+		return "", ""
+	}
+	f, err := os.Open(name)
+	if err != nil {
+		return "", ""
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, maxInfoBytes))
+	if err != nil {
+		return "", ""
+	}
+	lines := strings.Split(string(b), "\n")
+	if len(lines) < 3 {
+		return "", ""
+	}
+	return strings.TrimSpace(lines[0]), strings.TrimSpace(lines[2])
+}
+
+// esUnmanaged reports an ES binary of the own user in procs.
+func (c *Controller) esUnmanaged(procs []Proc) bool {
+	bin := orDefault(c.ESBinary, defaultESBinary)
+	uid := os.Getuid()
+	for _, p := range procs {
+		if p.UID == uid && p.PID > 1 && p.Exe == bin {
+			return true
+		}
+	}
+	return false
+}
+
+// stopMenuGame ends a game from the ES menu. The game runs in the process group of ES
+// (ES uses system()), so no group signal is sent: SIGTERM goes to every descendant of
+// runcommand (the emulator), and runcommand ends by itself (it restores the screen). Without
+// descendants (runcommand menu) runcommand gets SIGTERM. After the grace time everything left
+// gets SIGKILL. Only processes of the own user, never PID <= 1 or the own PID.
+func (c *Controller) stopMenuGame() error {
+	if c.Procs == nil {
+		return ErrNoGame
+	}
+	procs, err := c.Procs.List()
+	if err != nil {
+		return err
+	}
+	g, ok := c.menuGame(procs)
+	if !ok {
+		return ErrNoGame
+	}
+	kids := descendants(procs, g.pid, os.Getuid())
+	first := kids
+	if len(first) == 0 {
+		first = []int{g.pid}
+	}
+	for _, pid := range first {
+		_ = signal(pid, syscall.SIGTERM)
+	}
+	grace := c.gameGrace
+	if grace <= 0 {
+		grace = gameTermGrace
+	}
+	if waitGone(g.pid, grace) {
+		return nil
+	}
+	for _, pid := range append(kids, g.pid) {
+		_ = signal(pid, syscall.SIGKILL)
+	}
+	if waitGone(g.pid, time.Second) {
+		return nil
+	}
+	return fmt.Errorf("es: runcommand %d still runs after SIGKILL", g.pid)
+}
+
+// descendants returns the PIDs below root (children first in breadth order) that belong to
+// uid, without PID <= 1 and the own PID.
+func descendants(procs []Proc, root, uid int) []int {
+	kids := map[int][]Proc{}
+	for _, p := range procs {
+		kids[p.PPID] = append(kids[p.PPID], p)
+	}
+	self := os.Getpid()
+	var out []int
+	seen := map[int]bool{root: true}
+	queue := []int{root}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, k := range kids[cur] {
+			if seen[k.PID] {
+				continue
+			}
+			seen[k.PID] = true
+			queue = append(queue, k.PID)
+			if k.UID == uid && k.PID > 1 && k.PID != self {
+				out = append(out, k.PID)
+			}
+		}
+	}
+	return out
+}
+
+// waitGone polls until pid no longer exists or d passed; true when it is gone.
+func waitGone(pid int, d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for {
+		if syscall.Kill(pid, 0) == syscall.ESRCH {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(pollInterval)
+	}
 }

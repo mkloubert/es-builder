@@ -1,0 +1,8 @@
+{
+   "blockdevices": [
+      {"path": "/dev/sda", "pkname": null, "tran": "usb", "fstype": null, "size": 500107862016, "label": null, "type": "disk", "mountpoints": [null]},
+      {"path": "/dev/sda1", "pkname": "sda", "tran": null, "fstype": "vfat", "size": 536870912, "label": "bootfs", "type": "part", "mountpoints": ["/boot/firmware"]},
+      {"path": "/dev/sda2", "pkname": "sda", "tran": null, "fstype": "ext4", "size": 499570991104, "label": "rootfs", "type": "part", "mountpoints": ["/"]},
+      {"path": "/dev/sdb", "pkname": null, "tran": "usb", "fstype": "exfat", "size": 64023257088, "label": "GAMES", "type": "disk", "mountpoints": [null]}
+   ]
+}

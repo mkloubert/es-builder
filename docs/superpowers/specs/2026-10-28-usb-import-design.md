@@ -136,3 +136,23 @@ New rule: the exact-value check stays on every line (a value equal to the passwo
 - Kernel module names or availability on the Pi kernel (`ntfs3`) — checked by the static test, documented if missing.
 - Mount inside the service namespace — expected to work (same namespace for the sudo child); hardware check.
 - Very large sticks: staging copies the data once onto the SD card; commit is a rename. Time is bound by the stick and SD card speed.
+
+## 9. Fix: flat `lsblk` JSON (2026-10-31)
+
+Found in a UTM VM (Debian 12, util-linux 2.38): `lsblk -J -o PATH,PKNAME,…` without the `NAME`
+column prints a **flat** list. A partition is its own entry with `"pkname": "sda"`, not a
+`children` entry of its disk. lsblk draws the tree in the `NAME` column, so without it there is
+no tree. The `usb-list` filter only read `children`, so it never listed a partition, and the web
+UI said "No USB stick found" (also on the Pi, which has the same Debian).
+
+- `usb-list` accepts both forms. When no entry has `children`, the filter builds them: every entry
+  without `pkname` is a top-level device, and its children are the entries whose `pkname` is its
+  name (`path` without `/dev/`). Deeper levels (for example LVM or crypt on a partition) are not
+  used, as before.
+- The rest of the filter (USB, file system, root disk, mount points, path) is unchanged.
+- Tests: a fixture with the flat output from the VM (`test/fixtures/lsblk/flat-usb-stick.json`),
+  a flat fixture where `/` is on the USB disk, and the old nested fixtures still pass.
+
+Ruling: read both forms instead of adding `NAME` to the columns — the flat form is what the real
+system printed, and both forms stay covered by tests — cost if wrong: none; a nested output
+works as before.

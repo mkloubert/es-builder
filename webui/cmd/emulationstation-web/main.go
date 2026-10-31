@@ -241,7 +241,7 @@ func serve(ctx context.Context, cfgPath string, logw io.Writer) error {
 		UpdateConfig: holder.update,
 		Systems:      func() []systems.System { return sysList },
 		Stager:       stager,
-		ES:           &es.Controller{RunDir: cfg.Paths.RunDir},
+		ES:           &es.Controller{RunDir: cfg.Paths.RunDir, Procs: es.ProcFS{Root: "/proc"}},
 		Jobs:         q,
 		Priv:         privHelper,
 		Sysinfo:      sysinfo.Collector{DiskPath: cfg.Paths.Roms, CertPath: cfg.TLSCert},

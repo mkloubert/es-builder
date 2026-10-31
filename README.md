@@ -54,10 +54,14 @@ Edit `build.conf`. The file is plain `KEY=VALUE`. Values are not executed.
 - `HOSTNAME`: the device name. Default `emulationstation`.
 - `ES_AUTOSTART`: `yes` or `no`. Default **`no`**. With `yes`, the device boots straight into
   EmulationStation. With `no`, the screen (tty1) logs in user `emulationstation` by itself and
-  shows a shell with a hint. To start EmulationStation there, type
+  shows a shell with a hint. To start EmulationStation there, type `emulationstation` (on tty1
+  this starts it in its session, so the web UI can control it) or
   `exec /usr/local/lib/emulationstation/es-session`. While it does not run, the web UI shows
-  "EmulationStation is off". It cannot start it, but all other pages work. Any other value
-  stops the build.
+  "EmulationStation is off". It cannot start it, but all other pages work. If EmulationStation
+  was started in another way (for example over SSH), the web UI shows "EmulationStation runs
+  outside its session" and does not apply changes until you quit it. Games started from the
+  EmulationStation menu are shown on the dashboard too, and "Stop game" ends them. Any other
+  value stops the build.
   **Note:** older images always booted into EmulationStation. If you want that, set
   `ES_AUTOSTART=yes` before you build.
 - `WEB_USER` and `WEB_PASSWORD`: login for the web UI. The defaults are `zocken` / `zocken`.
@@ -201,6 +205,8 @@ not scrape this system, because ScreenScraper has no data for SID music.
   (`journalctl -u emulationstation-firstboot`) and the root does not grow. Make the VM disk
   bigger (16 GiB) and reboot: the root file system then grows by itself.
 - The serial console is active. There is usually no Bluetooth adapter in a VM, and the web UI says so.
+- USB stick in UTM: add the stick image as a new drive with the interface **USB** and do **not**
+  tick "Removable" (that makes a CD drive, and the web UI cannot read it). Use FAT32 or exFAT.
 
 ## Import the CA certificate
 

@@ -1,0 +1,71 @@
+{
+   "blockdevices": [
+      {
+         "path": "/dev/sda",
+         "pkname": null,
+         "tran": "usb",
+         "fstype": null,
+         "size": 2147483648,
+         "label": null,
+         "type": "disk",
+         "mountpoints": [
+             null
+         ]
+      },{
+         "path": "/dev/sda1",
+         "pkname": "sda",
+         "tran": null,
+         "fstype": "vfat",
+         "size": 2146435072,
+         "label": "MEINSTICK",
+         "type": "part",
+         "mountpoints": [
+             null
+         ]
+      },{
+         "path": "/dev/zram0",
+         "pkname": null,
+         "tran": null,
+         "fstype": null,
+         "size": 268435456,
+         "label": null,
+         "type": "disk",
+         "mountpoints": [
+             "[SWAP]"
+         ]
+      },{
+         "path": "/dev/vda",
+         "pkname": null,
+         "tran": null,
+         "fstype": null,
+         "size": 17179869184,
+         "label": null,
+         "type": "disk",
+         "mountpoints": [
+             null
+         ]
+      },{
+         "path": "/dev/vda1",
+         "pkname": "vda",
+         "tran": null,
+         "fstype": "ext4",
+         "size": 17045634560,
+         "label": null,
+         "type": "part",
+         "mountpoints": [
+             "/"
+         ]
+      },{
+         "path": "/dev/vda15",
+         "pkname": "vda",
+         "tran": null,
+         "fstype": "vfat",
+         "size": 133169152,
+         "label": null,
+         "type": "part",
+         "mountpoints": [
+             "/boot/efi"
+         ]
+      }
+   ]
+}
