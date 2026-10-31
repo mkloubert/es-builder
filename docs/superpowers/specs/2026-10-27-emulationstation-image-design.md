@@ -291,6 +291,13 @@ Games and BIOS files can also be imported from a USB stick (page "USB", helper s
 [2026-10-28-usb-import-design.md](2026-10-28-usb-import-design.md). The extra `web.conf` key is
 `USB_MAX_FILES` (maximum number of files per import, default `20000`).
 
+### 6.8 CPU speed limit (Pi 4)
+
+On a Raspberry Pi 4 the dashboard shows the firmware throttle state, and the System page (tab
+"CPU") sets a top CPU speed (helper sub commands `cpu-set`, `cpu-apply`; boot unit
+`emulationstation-cpu.service`). This is described in
+[2026-10-31-cpu-limit-design.md](2026-10-31-cpu-limit-design.md).
+
 ## 7. TLS
 
 - At build time: if `secrets/ca.key` + `secrets/ca.crt` do not exist, a CA is created (ECDSA P-256, 10 years, CN "EmuStation Builder Local CA"). The CA is reused across builds.

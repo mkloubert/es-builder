@@ -356,6 +356,7 @@ checks_app() {
   checks_units
   checks_firstboot
   checks_usb
+  check "emulationstation-cpu.service enabled" is_wanted multi-user.target emulationstation-cpu.service
 }
 
 run_checks() {

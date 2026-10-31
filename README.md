@@ -271,6 +271,19 @@ Replace `<device>` in them with the IP address or name of the device.
   wizard does not appear. The "reset" button in the web UI does not help in this case. Connect a USB
   keyboard and use the ES menu "Configure Input" for the pad, or fix `xpadneo` and build again.
 
+## CPU speed and heat (Pi 4)
+
+The Pi 4 slows down by itself when it gets too hot (from about 80 °C). The dashboard shows if
+this happens now, and also if the power supply is too weak (read with `vcgencmd get_throttled`
+through the root helper).
+
+To keep the Pi cooler, open the System page, tab "CPU", and choose a top CPU speed: Max, 1200,
+1000, 800 or 600 MHz. It works at once, and it stays after a reboot (saved in
+`/var/lib/emulationstation-cpu/max-mhz`, applied at boot by `emulationstation-cpu.service`).
+Lower speeds make heavy games slower. A heat sink or a fan helps more than a lower speed.
+The web UI never changes `config.txt` and never sets a speed above the board's own top speed.
+The VM images do not show the tab.
+
 ## Custom web UI
 
 You can change the look and the texts of the web UI with your own files. Every file you do not

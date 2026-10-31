@@ -17,9 +17,12 @@
 package web
 
 import (
+	"context"
+	"emulationstation/webui/internal/cpu"
 	"errors"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"emulationstation/webui/internal/es"
 	"emulationstation/webui/internal/sysinfo"
@@ -32,6 +35,8 @@ type statusView struct {
 	ROMName    string
 	SystemName string
 	Info       sysinfo.Info
+	CPU        cpu.State
+	Throttle   cpu.Throttle
 }
 
 func (s *Server) dashboardRoutes(mux *http.ServeMux) {
@@ -55,6 +60,16 @@ func (s *Server) status() statusView {
 		}
 	}
 	v.Info, _ = s.d.Sysinfo.Collect(s.now())
+	v.CPU = cpu.Read(s.d.Sysinfo.Root)
+	if v.CPU.Supported && s.d.Priv.R != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if raw, err := s.d.Priv.CPUThrottled(ctx); err != nil {
+			s.logf("cpu-throttled: %v", err)
+		} else {
+			v.Throttle = cpu.ParseThrottled(raw)
+		}
+	}
 	return v
 }
 

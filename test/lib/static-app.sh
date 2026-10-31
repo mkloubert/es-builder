@@ -96,6 +96,14 @@ webui_custom_ok() {
   [ -d "$d" ] && [ ! -L "$d" ] &&
     [ -z "$(find "$d" \( -type l -o ! -uid "$uid" -o ! -gid "$gid" \) -print -quit 2>/dev/null)" ]
 }
+# cpu_unit_ok : the boot unit of the CPU speed limit is a oneshot that runs priv cpu-apply and
+# opens nothing (spec 2026-10-31-cpu-limit-design.md 3.2)
+cpu_unit_ok() {
+  local f=$R/etc/systemd/system/emulationstation-cpu.service
+  grep -qx 'Type=oneshot' "$f" 2>/dev/null &&
+    grep -qx 'ExecStart=/usr/local/lib/emulationstation/priv cpu-apply' "$f" &&
+    ! grep -qE 'Listen|Socket|Port' "$f"
+}
 ui_dir_set() { grep -qx 'UI_DIR=/home/emulationstation/webui-custom' "$R/etc/emulationstation-web/web.conf" 2>/dev/null; }
 machine_id_unset() { [ "$(cat "$R/etc/machine-id" 2>/dev/null)" = uninitialized ]; }
 no_host_keys() { ! compgen -G "$R/etc/ssh/ssh_host_*" >/dev/null; }
@@ -198,6 +206,7 @@ checks_units() {
   check "autostart.sh: es-session (yes) or the off hint (no)" autostart_ok
   check "webui-custom folder: emulationstation, no symlinks" webui_custom_ok
   check "web.conf: UI_DIR=/home/emulationstation/webui-custom" ui_dir_set
+  check "emulationstation-cpu.service: oneshot priv cpu-apply" cpu_unit_ok
 }
 
 checks_firstboot() {

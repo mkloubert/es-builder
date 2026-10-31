@@ -35,3 +35,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </ul>
 {{else}}<div class="rounded-xl border border-dashed border-zinc-700 p-8 text-center text-sm text-zinc-400">No banned addresses.</div>{{end}}
 </div>{{end}}
+
+{{define "cpu"}}<div id="cpu" class="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+<p class="text-sm text-zinc-300">Top CPU speed: {{.MaxMHz}} MHz (board top speed: {{.HWMaxMHz}} MHz).</p>
+<form method="post" action="/system/cpu" hx-post="/system/cpu" hx-target="#cpu" hx-swap="outerHTML" class="space-y-3">
+  <fieldset class="flex flex-wrap gap-3">
+    <legend class="sr-only">Top CPU speed</legend>
+    {{$cur := .Current}}{{range .Choices}}
+    <label class="flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-2 text-sm"><input type="radio" name="value" value="{{.}}"{{if eq . $cur}} checked{{end}} class="accent-red-500">{{if eq . "max"}}Max{{else}}{{.}} MHz{{end}}</label>
+    {{end}}
+  </fieldset>
+  <button class="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Save</button>
+</form>
+<p class="text-xs text-zinc-500">The Pi also slows down by itself when it gets too hot. A heat sink or a fan helps more than a lower speed.</p>
+</div>{{end}}

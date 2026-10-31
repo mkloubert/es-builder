@@ -144,6 +144,21 @@ warning.
 - [ ] Modules listed as failed in `out/build-report.txt`: the systems of these modules are missing in ES.
   This is expected. Write down which ones.
 
+## 6a. CPU speed and heat (Pi 4)
+
+- [ ] `vcgencmd get_throttled` (as root, for example on the console) prints `throttled=0x0`.
+  Expected: the dashboard shows "Not throttled." under "CPU temperature". If the line is
+  missing, check the journal of `emulationstation-web` for `cpu-throttled` and note it.
+- [ ] System page, tab "CPU": choose 800 MHz, "Save". Expected: the toast "CPU speed limit
+  saved.", the text "Top CPU speed: 800 MHz", and
+  `cat /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq` prints `800000`.
+- [ ] Reboot. Expected: still 800000 and "Top CPU speed: 800 MHz"
+  (`systemctl status emulationstation-cpu` ran without an error).
+- [ ] With a weak power supply (or a long thin USB cable), play a heavy game. Expected: the
+  dashboard shows the power line ("Power is too low …").
+- [ ] Choose "Max" again. Expected: `scaling_max_freq` is the board top speed (1500000 or
+  1800000).
+
 ## 7. Controllers
 
 The templates are in `controllers/templates/` (see the README there). A template controller must

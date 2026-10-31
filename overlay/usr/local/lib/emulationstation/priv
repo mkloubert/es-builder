@@ -17,9 +17,11 @@
 
 # Root helper for the web UI. Called as: sudo -n /usr/local/lib/emulationstation/priv <cmd> [arg]
 # Commands: reboot, poweroff, apt-update, apt-upgrade, f2b-list, f2b-unban <ip>, journal <unit>,
-# usb-list, usb-mount <device>, usb-umount.
+# usb-list, usb-mount <device>, usb-umount, cpu-set <max|1200|1000|800|600>, cpu-apply,
+# cpu-throttled.
 # Exit codes: 2 = usage error or invalid argument; 3 = the USB devices could not be read (usb-list,
-# usb-mount); other codes come from the command that ran.
+# usb-mount) or the throttle state could not be read (cpu-throttled); other codes come from the
+# command that ran.
 #
 # Deviation from the project shebang rule (#!/usr/bin/env bash): this script runs as root, so it
 # uses the fixed path /bin/bash and does not look up bash through PATH.
@@ -34,7 +36,7 @@ export PATH
 
 usage() {
   printf 'priv: %s\n' "$1" >&2
-  printf 'Usage: priv reboot|poweroff|apt-update|apt-upgrade|f2b-list|f2b-unban <ip>|journal <unit>|usb-list|usb-mount <device>|usb-umount\n' >&2
+  printf 'Usage: priv reboot|poweroff|apt-update|apt-upgrade|f2b-list|f2b-unban <ip>|journal <unit>|usb-list|usb-mount <device>|usb-umount|cpu-set <max|1200|1000|800|600>|cpu-apply|cpu-throttled\n' >&2
   exit 2
 }
 
@@ -141,6 +143,66 @@ usb_umount() {
   fi
 }
 
+# CPU speed limit (spec 2026-10-31-cpu-limit-design.md). The saved value lives in /var/lib, because
+# /etc is read-only in the web service's namespace (ProtectSystem=full). Tests may move /sys and
+# /proc (PRIV_TEST_SYS) and the state folder (PRIV_TEST_STATE), but only when not running as root.
+CPU_SYS=
+CPU_STATE=/var/lib/emulationstation-cpu
+CPU_OWNER=(-o root -g root)
+if [ "$EUID" -ne 0 ]; then
+  if [ -n "${PRIV_TEST_SYS:-}" ]; then CPU_SYS=$PRIV_TEST_SYS; fi
+  if [ -n "${PRIV_TEST_STATE:-}" ]; then
+    CPU_STATE=$PRIV_TEST_STATE
+    CPU_OWNER=()
+  fi
+fi
+CPU_FREQ=$CPU_SYS/sys/devices/system/cpu/cpufreq
+
+# cpu_supported : a Raspberry Pi 4 board with cpufreq
+cpu_supported() {
+  local model
+  model=$(tr -d '\0' <"$CPU_SYS/proc/device-tree/model" 2>/dev/null) || return 1
+  [[ $model == "Raspberry Pi 4"* ]] && [ -f "$CPU_FREQ/policy0/scaling_max_freq" ] &&
+    [ ! -L "$CPU_FREQ/policy0" ]
+}
+
+# cpu_khz <value> : prints the kHz for a value of the fixed list; fails for anything else or a
+# speed above the board top speed
+cpu_khz() {
+  local hw mhz
+  hw=$(cat "$CPU_FREQ/policy0/cpuinfo_max_freq" 2>/dev/null) || return 1
+  [[ $hw =~ ^[1-9][0-9]{0,8}$ ]] || return 1
+  case "$1" in
+    max) printf '%s\n' "$hw"; return 0 ;;
+    1200 | 1000 | 800 | 600) mhz=$1 ;;
+    *) return 1 ;;
+  esac
+  [ $((mhz * 1000)) -le "$hw" ] || return 1
+  printf '%s\n' $((mhz * 1000))
+}
+
+# cpu_write <khz> : writes scaling_max_freq of every policy; symlinks are skipped
+cpu_write() {
+  local p
+  for p in "$CPU_FREQ"/policy[0-9]*; do
+    if [ ! -d "$p" ] || [ -L "$p" ] || [ ! -f "$p/scaling_max_freq" ] || [ -L "$p/scaling_max_freq" ]; then
+      continue
+    fi
+    printf '%s\n' "$1" >"$p/scaling_max_freq" || return 1
+  done
+}
+
+# cpu_save <value> : saves the value with a temp file and rename
+cpu_save() {
+  local tmp
+  install -d -m 0755 "${CPU_OWNER[@]}" "$CPU_STATE" || return 1
+  tmp=$(mktemp "$CPU_STATE/.max-mhz.XXXXXX") || return 1
+  if ! { printf '%s\n' "$1" >"$tmp" && chmod 0644 "$tmp" && mv -f "$tmp" "$CPU_STATE/max-mhz"; }; then
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
 [ $# -ge 1 ] || usage "missing command"
 cmd=$1
 shift
@@ -241,6 +303,42 @@ case "$cmd" in
   usb-umount)
     no_args "$@"
     usb_umount
+    ;;
+  cpu-set)
+    [ $# -eq 1 ] || usage "'cpu-set' needs one value"
+    case "$1" in
+      max | 1200 | 1000 | 800 | 600) ;;
+      *) usage "invalid cpu speed" ;;
+    esac
+    cpu_supported || usage "cpu limit is not supported on this device"
+    khz=$(cpu_khz "$1") || usage "cpu speed is above the board top speed"
+    cpu_write "$khz" || exit 1
+    cpu_save "$1" || exit 1
+    ;;
+  # Runs at boot (emulationstation-cpu.service). It never fails the boot for a bad saved value.
+  cpu-apply)
+    no_args "$@"
+    cpu_supported || exit 0
+    if [ ! -f "$CPU_STATE/max-mhz" ] || [ -L "$CPU_STATE/max-mhz" ]; then
+      exit 0
+    fi
+    value=$(head -c 16 "$CPU_STATE/max-mhz" | tr -d '\n')
+    if ! khz=$(cpu_khz "$value"); then
+      printf 'priv: saved cpu limit is not valid, it is ignored\n' >&2
+      exit 0
+    fi
+    cpu_write "$khz" || exit 1
+    ;;
+  # The throttle bits of the firmware. The sysfs file get_throttled is gone in the rpi-6.12 kernel,
+  # and the web user has no access to /dev/vcio, so vcgencmd runs here. Only a checked value is printed.
+  cpu-throttled)
+    no_args "$@"
+    cpu_supported || usage "cpu limit is not supported on this device"
+    if ! out=$(vcgencmd get_throttled 2>/dev/null) || [[ ! $out =~ ^throttled=(0x[0-9a-fA-F]{1,8})$ ]]; then
+      printf 'priv: could not read the throttle state\n' >&2
+      exit 3
+    fi
+    printf '%s\n' "${BASH_REMATCH[1]}"
     ;;
   *) usage "unknown command" ;;
 esac

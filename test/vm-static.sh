@@ -146,6 +146,7 @@ root_locked() {
   case "$pw" in "!"* | "*"*) return 0 ;; esac
   return 1
 }
+not_wanted_cpu() { ! is_wanted multi-user.target emulationstation-cpu.service; }
 is_wanted() { [ -L "$R/etc/systemd/system/$1.wants/$2" ] || [ -e "$R/etc/systemd/system/$1.wants/$2" ]; }
 has_line() { grep -qxF "$2" "$R/$1" 2>/dev/null; }
 in_report() { [ -n "$REPORT" ] && [ -f "$REPORT" ] && grep -q "^$1 " "$REPORT"; }
@@ -378,6 +379,7 @@ checks_app() {
   checks_units
   checks_firstboot
   checks_usb
+  check "emulationstation-cpu.service not enabled (Pi 4 only)" not_wanted_cpu
 }
 
 run_checks() {

@@ -20,6 +20,7 @@ package priv
 import (
 	"bytes"
 	"context"
+	"emulationstation/webui/internal/cpu"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -129,6 +131,29 @@ func (p Priv) Unban(ctx context.Context, ip string) error {
 		return fmt.Errorf("invalid IP address %q", ip)
 	}
 	return p.run(ctx, nil, "f2b-unban", ip)
+}
+
+// CPUSet sets the top CPU speed (one of cpu.Values); the helper checks the value again.
+func (p Priv) CPUSet(ctx context.Context, value string) error {
+	if !cpu.ValidValue(value) {
+		return fmt.Errorf("invalid cpu speed %q", value)
+	}
+	return p.run(ctx, nil, "cpu-set", value)
+}
+
+var throttledRe = regexp.MustCompile(`^0x[0-9a-fA-F]{1,8}$`)
+
+// CPUThrottled returns the firmware throttle bits ("0x…"); the output is checked again.
+func (p Priv) CPUThrottled(ctx context.Context) (string, error) {
+	var buf bytes.Buffer
+	if err := p.run(ctx, &buf, "cpu-throttled"); err != nil {
+		return "", err
+	}
+	v := strings.TrimSuffix(buf.String(), "\n")
+	if !throttledRe.MatchString(v) {
+		return "", fmt.Errorf("cpu-throttled: unexpected output %q", buf.String())
+	}
+	return v, nil
 }
 
 // Journal returns the journal of an allowed unit.

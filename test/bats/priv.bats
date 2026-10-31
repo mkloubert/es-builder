@@ -556,3 +556,165 @@ run_app30() {
   [[ $output == *"priv: could not unmount the USB stick"* ]]
   run ! grep -q '^mount' "$CALLS"
 }
+
+# --- cpu-set / cpu-apply (spec 2026-10-31-cpu-limit-design.md 3.1) ---------------------------
+
+# cpu_fake <model> <hwmax-khz> : a fake /proc and /sys below $SYSR, state folder $STATE
+cpu_fake() {
+  SYSR="$BATS_TEST_TMPDIR/sysroot"
+  STATE="$BATS_TEST_TMPDIR/state/emulationstation-cpu"
+  export PRIV_TEST_SYS="$SYSR" PRIV_TEST_STATE="$STATE"
+  mkdir -p "$SYSR/proc/device-tree" "$SYSR/sys/devices/system/cpu/cpufreq/policy0"
+  printf '%s\0' "$1" >"$SYSR/proc/device-tree/model"
+  echo "$2" >"$SYSR/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq"
+  echo "$2" >"$SYSR/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq"
+}
+pol() { cat "$SYSR/sys/devices/system/cpu/cpufreq/policy$1/scaling_max_freq"; }
+
+@test "priv cpu-set: 1200 writes the policy and saves the value" {
+  need_nonroot
+  cpu_fake "Raspberry Pi 4 Model B Rev 1.1" 1500000
+  run "$PRIV" cpu-set 1200
+  [ "$status" -eq 0 ]
+  [ "$(pol 0)" = 1200000 ]
+  [ "$(cat "$STATE/max-mhz")" = 1200 ]
+  [ "$(stat -c %a "$STATE/max-mhz")" = 644 ]
+  [ "$(stat -c %a "$STATE")" = 755 ]
+}
+
+@test "priv cpu-set: max uses the board top speed; every policy is written" {
+  need_nonroot
+  cpu_fake "Raspberry Pi 4 Model B Rev 1.4" 1800000
+  mkdir -p "$SYSR/sys/devices/system/cpu/cpufreq/policy1"
+  echo 1800000 >"$SYSR/sys/devices/system/cpu/cpufreq/policy1/scaling_max_freq"
+  "$PRIV" cpu-set 600
+  [ "$(pol 0)" = 600000 ]
+  [ "$(pol 1)" = 600000 ]
+  run "$PRIV" cpu-set max
+  [ "$status" -eq 0 ]
+  [ "$(pol 0)" = 1800000 ]
+  [ "$(pol 1)" = 1800000 ]
+  [ "$(cat "$STATE/max-mhz")" = max ]
+}
+
+@test "priv cpu-set: values outside the list are refused, nothing changes" {
+  need_nonroot
+  cpu_fake "Raspberry Pi 4 Model B Rev 1.1" 1500000
+  local v
+  for v in 1100 1200000 '' '1200;x' MAX ' 800' '800 '; do
+    run "$PRIV" cpu-set "$v"
+    [ "$status" -eq 2 ]
+  done
+  run "$PRIV" cpu-set
+  [ "$status" -eq 2 ]
+  run "$PRIV" cpu-set 800 600
+  [ "$status" -eq 2 ]
+  [ "$(pol 0)" = 1500000 ]
+  [ ! -e "$STATE" ]
+}
+
+@test "priv cpu-set: a speed above the board top speed is refused" {
+  need_nonroot
+  cpu_fake "Raspberry Pi 4 Model B Rev 1.1" 1000000
+  run "$PRIV" cpu-set 1200
+  [ "$status" -eq 2 ]
+  [ "$(pol 0)" = 1000000 ]
+  run "$PRIV" cpu-set 1000
+  [ "$status" -eq 0 ]
+}
+
+@test "priv cpu-set: another board is not supported" {
+  need_nonroot
+  cpu_fake "Raspberry Pi 5 Model B Rev 1.0" 2400000
+  run "$PRIV" cpu-set 1200
+  [ "$status" -eq 2 ]
+  [[ $output == *"cpu limit is not supported on this device"* ]]
+  [ "$(pol 0)" = 2400000 ]
+  rm -rf "$SYSR/sys/devices/system/cpu/cpufreq/policy0"
+  printf 'Raspberry Pi 4 Model B Rev 1.1\0' >"$SYSR/proc/device-tree/model"
+  run "$PRIV" cpu-set 1200
+  [ "$status" -eq 2 ]
+}
+
+@test "priv cpu-set: a policy that is a symlink, or a symlinked file, is not written" {
+  need_nonroot
+  cpu_fake "Raspberry Pi 4 Model B Rev 1.1" 1500000
+  local out="$BATS_TEST_TMPDIR/outside"
+  mkdir -p "$out/p"
+  echo keep >"$out/p/scaling_max_freq"
+  echo keep >"$out/file"
+  ln -s "$out/p" "$SYSR/sys/devices/system/cpu/cpufreq/policy1"
+  mkdir -p "$SYSR/sys/devices/system/cpu/cpufreq/policy2"
+  ln -s "$out/file" "$SYSR/sys/devices/system/cpu/cpufreq/policy2/scaling_max_freq"
+  run "$PRIV" cpu-set 800
+  [ "$status" -eq 0 ]
+  [ "$(pol 0)" = 800000 ]
+  [ "$(cat "$out/p/scaling_max_freq")" = keep ]
+  [ "$(cat "$out/file")" = keep ]
+}
+
+@test "priv cpu-apply: no file, a good file, a broken file, another board" {
+  need_nonroot
+  cpu_fake "Raspberry Pi 4 Model B Rev 1.1" 1500000
+  run "$PRIV" cpu-apply
+  [ "$status" -eq 0 ]
+  [ "$(pol 0)" = 1500000 ]
+  mkdir -p "$STATE"
+  echo 800 >"$STATE/max-mhz"
+  run "$PRIV" cpu-apply
+  [ "$status" -eq 0 ]
+  [ "$(pol 0)" = 800000 ]
+  echo junk >"$STATE/max-mhz"
+  echo 1500000 >"$SYSR/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq"
+  run "$PRIV" cpu-apply
+  [ "$status" -eq 0 ]
+  [[ $output == *"saved cpu limit is not valid"* ]]
+  [ "$(pol 0)" = 1500000 ]
+  echo 800 >"$STATE/max-mhz"
+  printf 'Raspberry Pi 3 Model B\0' >"$SYSR/proc/device-tree/model"
+  run "$PRIV" cpu-apply
+  [ "$status" -eq 0 ]
+  [ "$(pol 0)" = 1500000 ]
+  run "$PRIV" cpu-apply extra
+  [ "$status" -eq 2 ]
+}
+
+@test "priv: usage lists cpu-set and cpu-apply" {
+  run "$PRIV" nope
+  [ "$status" -eq 2 ]
+  [[ $output == *"cpu-set <max|1200|1000|800|600>"* ]]
+  [[ $output == *"cpu-apply"* ]]
+}
+
+@test "priv cpu-throttled: prints only the checked hex value of vcgencmd" {
+  need_nonroot
+  cpu_fake "Raspberry Pi 4 Model B Rev 1.1" 1500000
+  stub vcgencmd 'echo throttled=0x50005'
+  run "$PRIV" cpu-throttled
+  [ "$status" -eq 0 ]
+  [ "$output" = 0x50005 ]
+  grep -qx 'vcgencmd get_throttled' "$CALLS"
+  run "$PRIV" cpu-throttled extra
+  [ "$status" -eq 2 ]
+}
+
+@test "priv cpu-throttled: junk, extra text or a failing vcgencmd give exit 3" {
+  need_nonroot
+  cpu_fake "Raspberry Pi 4 Model B Rev 1.1" 1500000
+  local out
+  for out in 'echo throttled=junk' 'echo throttled=0x123456789' 'printf "throttled=0x0\nx\n"' 'echo "throttled=0x0;id"' 'exit 1'; do
+    stub vcgencmd "$out"
+    run "$PRIV" cpu-throttled
+    [ "$status" -eq 3 ]
+    [[ $output != *throttled=* ]]
+  done
+}
+
+@test "priv cpu-throttled: another board is not supported, vcgencmd is not called" {
+  need_nonroot
+  cpu_fake "Raspberry Pi 5 Model B Rev 1.0" 2400000
+  stub vcgencmd 'echo throttled=0x0'
+  run "$PRIV" cpu-throttled
+  [ "$status" -eq 2 ]
+  [ ! -s "$CALLS" ]
+}

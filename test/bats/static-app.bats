@@ -43,6 +43,9 @@ setup() {
     ln -s "/lib/systemd/system/$u.service" "$R/etc/systemd/system/multi-user.target.wants/$u.service"
   done
   echo uninitialized >"$R/etc/machine-id"
+  # the CPU limit unit is enabled on rpi4 only (rm_cpu_unit for VM checks)
+  CPU_LINK="$R/etc/systemd/system/multi-user.target.wants/emulationstation-cpu.service"
+  ln -s /etc/systemd/system/emulationstation-cpu.service "$CPU_LINK"
   # custom web UI folder and its web.conf key (spec 2026-10-31-webui-custom-design.md 3.2)
   mkdir -p "$R/home/emulationstation/webui-custom/static" "$R/etc/emulationstation-web"
   echo x >"$R/home/emulationstation/webui-custom/static/a.css"
@@ -96,6 +99,7 @@ shared_lines() {
 
 @test "vm-static: all shared app checks pass on a good fake root (ESP boot/efi)" {
   printf 'TARGET_KIND=vm\nBOOT_DIR=/boot/efi\n' >"$R/usr/local/lib/emulationstation/firstboot.conf"
+  rm -f "$CPU_LINK"
   run shared_lines vm-static.sh --arch amd64
   [ "$status" -eq 0 ]
   [[ $output == *"PASS: first boot script installed and set to /boot/efi"* ]]
@@ -177,6 +181,7 @@ shared_lines() {
 
 @test "usb checks: a missing vfat module fails (vm-static)" {
   rm "$R/lib/modules/6.12.0-test/have/vfat"
+  rm -f "$CPU_LINK"
   run shared_lines vm-static.sh --arch amd64
   [[ $output == *"FAIL: USB: kernel 6.12.0-test has vfat"* ]]
 }
@@ -268,10 +273,29 @@ shared_lines() {
   [[ $output == *"PASS: web.conf: UI_DIR=/home/emulationstation/webui-custom"* ]]
   ln -s /etc/passwd "$R/home/emulationstation/webui-custom/static/pw"
   sed -i '/^UI_DIR=/d' "$R/etc/emulationstation-web/web.conf"
+  rm -f "$CPU_LINK"
   run shared_lines vm-static.sh --arch amd64
   [[ $output == *"FAIL: webui-custom folder: emulationstation, no symlinks"* ]]
   [[ $output == *"FAIL: web.conf: UI_DIR=/home/emulationstation/webui-custom"* ]]
   rm -rf "$R/home/emulationstation/webui-custom"
   run shared_lines rpi4-static.sh
   [[ $output == *"FAIL: webui-custom folder: emulationstation, no symlinks"* ]]
+}
+
+@test "cpu unit: enabled on rpi4, not enabled on the VM, oneshot with priv cpu-apply" {
+  rm "$CPU_LINK"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"FAIL: emulationstation-cpu.service enabled"* ]]
+  [[ $output == *"PASS: emulationstation-cpu.service: oneshot priv cpu-apply"* ]]
+  rm -f "$CPU_LINK"
+  run shared_lines vm-static.sh --arch amd64
+  [[ $output == *"PASS: emulationstation-cpu.service not enabled (Pi 4 only)"* ]]
+  ln -s /etc/systemd/system/emulationstation-cpu.service "$CPU_LINK"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"PASS: emulationstation-cpu.service enabled"* ]]
+  run shared_lines vm-static.sh --arch amd64
+  [[ $output == *"FAIL: emulationstation-cpu.service not enabled (Pi 4 only)"* ]]
+  echo 'ListenStream=1234' >>"$R/etc/systemd/system/emulationstation-cpu.service"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"FAIL: emulationstation-cpu.service: oneshot priv cpu-apply"* ]]
 }

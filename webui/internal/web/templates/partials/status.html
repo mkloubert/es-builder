@@ -71,6 +71,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
       <dt class="text-zinc-400">Hostname</dt><dd class="text-right font-medium">{{if .Info.Hostname}}{{.Info.Hostname}}{{else}}–{{end}}</dd>
       <dt class="text-zinc-400">CPU temperature</dt><dd class="text-right font-medium">{{if .Info.HasTemp}}{{printf "%.1f" .Info.TempC}} °C{{else}}–{{end}}</dd>
+      {{with .Throttle}}{{if .Known}}<dt class="text-zinc-400">Throttle</dt><dd class="text-right font-medium {{if .Now}}text-amber-300{{end}}">{{if .NowHeat}}Too hot: the CPU is slowed down now.{{else if .NowPower}}Power is too low: the CPU is slowed down now. Use a stronger power supply.{{else}}Not throttled.{{end}}</dd>{{end}}{{end}}
       <dt class="text-zinc-400">Load</dt><dd class="text-right font-medium">{{printf "%.2f" .Info.Load1}}</dd>
       <dt class="text-zinc-400">RAM</dt><dd class="text-right font-medium">{{if .Info.MemTotal}}{{bytes (sub .Info.MemTotal .Info.MemAvail)}} / {{bytes .Info.MemTotal}}{{else}}–{{end}}</dd>
       <dt class="text-zinc-400">Free storage</dt><dd class="text-right font-medium">{{if .Info.DiskTotal}}{{bytes .Info.DiskFree}} of {{bytes .Info.DiskTotal}}{{else}}–{{end}}</dd>

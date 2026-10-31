@@ -22,8 +22,10 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"slices"
 	"time"
 
+	"emulationstation/webui/internal/cpu"
 	"emulationstation/webui/internal/jobs"
 	"emulationstation/webui/internal/priv"
 )
@@ -42,6 +44,7 @@ func (s *Server) systemRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /system/reboot", s.power("The system is restarting …", priv.Priv.Reboot))
 	mux.HandleFunc("POST /system/poweroff", s.power("The system is shutting down …", priv.Priv.Poweroff))
 	mux.HandleFunc("POST /system/ui-reload", s.handleUIReload)
+	mux.HandleFunc("POST /system/cpu", s.handleCPU)
 }
 
 type logUnit struct{ Key, Label, Unit string }
@@ -62,6 +65,7 @@ type sysPageView struct {
 	Units []logUnit
 	Bans  bansView
 	UI    uiState
+	CPU   cpu.State
 }
 
 func (s *Server) bans(ctx context.Context) bansView {
@@ -77,7 +81,7 @@ func (s *Server) bans(ctx context.Context) bansView {
 }
 
 func (s *Server) handleSystemPage(w http.ResponseWriter, r *http.Request) {
-	s.page(w, r, "system", "System", sysPageView{Units: logUnits, Bans: s.bans(r.Context()), UI: *s.ui.Load()})
+	s.page(w, r, "system", "System", sysPageView{Units: logUnits, Bans: s.bans(r.Context()), UI: *s.ui.Load(), CPU: cpu.Read(s.d.Sysinfo.Root)})
 }
 
 // handleUIReload parses the templates again (custom folder over the built-in files).
@@ -202,4 +206,38 @@ func (s *Server) power(msg string, act func(priv.Priv, context.Context) error) h
 		}()
 		s.ok(w, r, msg, "/system")
 	}
+}
+
+// handleCPU sets the top CPU speed through the root helper (Pi 4 only).
+func (s *Server) handleCPU(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	v := r.PostFormValue("value")
+	st := cpu.Read(s.d.Sysinfo.Root)
+	if !cpu.ValidValue(v) {
+		s.fail(w, r, http.StatusBadRequest, "Unknown CPU speed.")
+		return
+	}
+	if !st.Supported {
+		s.fail(w, r, http.StatusConflict, "This device does not support a CPU speed limit.")
+		return
+	}
+	if !slices.Contains(st.Choices(), v) {
+		s.fail(w, r, http.StatusBadRequest, "Unknown CPU speed.")
+		return
+	}
+	if s.d.Priv.R == nil {
+		s.fail(w, r, http.StatusInternalServerError, "The CPU speed could not be set.")
+		return
+	}
+	if err := s.d.Priv.CPUSet(r.Context(), v); err != nil {
+		s.logf("cpu-set %s: %v", v, err)
+		s.fail(w, r, http.StatusInternalServerError, "The CPU speed could not be set.")
+		return
+	}
+	if !isHTMX(r) {
+		redirect(w, r, "/system")
+		return
+	}
+	toast(w, "CPU speed limit saved.")
+	s.partial(w, http.StatusOK, "cpu", cpu.Read(s.d.Sysinfo.Root))
 }

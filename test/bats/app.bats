@@ -504,3 +504,28 @@ EOF2
   [ "$(cat "$BATS_TEST_TMPDIR/bin")" = mine ]
   [ ! -e "$fake/webui/custom/templates/partials" ]
 }
+
+@test "rpi4/app-10-cpu.sh: enables emulationstation-cpu.service; idempotent; dies without the unit" {
+  local r="$BATS_TEST_TMPDIR/r" d="$BATS_TEST_TMPDIR/stubs-cpu"
+  mkdir -p "$d" "$r/etc/systemd/system"
+  printf '#!/bin/bash\nprintf "systemctl %%s\\n" "$*" >>"%s"\n' "$CALLS" >"$d/systemctl"
+  chmod +x "$d/systemctl"
+  run env PATH="$d:$PATH" PROVISION_ROOT="$r" bash "$ROOT/provision/rpi4/app-10-cpu.sh"
+  [ "$status" -ne 0 ]
+  [[ $output == *"emulationstation-cpu.service"* ]]
+  cp "$ROOT/overlay/etc/systemd/system/emulationstation-cpu.service" "$r/etc/systemd/system/"
+  run env PATH="$d:$PATH" PROVISION_ROOT="$r" bash "$ROOT/provision/rpi4/app-10-cpu.sh"
+  [ "$status" -eq 0 ]
+  run env PATH="$d:$PATH" PROVISION_ROOT="$r" bash "$ROOT/provision/rpi4/app-10-cpu.sh"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^systemctl enable emulationstation-cpu.service$' "$CALLS")" -eq 2 ]
+}
+
+@test "emulationstation-cpu.service: oneshot, runs priv cpu-apply, opens nothing" {
+  local u="$ROOT/overlay/etc/systemd/system/emulationstation-cpu.service"
+  grep -qx 'Type=oneshot' "$u"
+  grep -qx 'ExecStart=/usr/local/lib/emulationstation/priv cpu-apply' "$u"
+  grep -qx 'WantedBy=multi-user.target' "$u"
+  run grep -E 'Listen|Socket|Port' "$u"
+  [ "$status" -ne 0 ]
+}

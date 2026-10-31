@@ -133,3 +133,46 @@ func TestReadESLog(t *testing.T) {
 		t.Fatal(strings.Count(s, "\n"), err)
 	}
 }
+
+func TestCPUSet(t *testing.T) {
+	f := &fakeRunner{}
+	p := Priv{R: f, Helper: DefaultHelper}
+	for _, bad := range []string{"1100", "", "MAX", "800;id", "1200000"} {
+		if err := p.CPUSet(context.Background(), bad); err == nil {
+			t.Errorf("CPUSet(%q): want error", bad)
+		}
+	}
+	if len(f.calls) != 0 {
+		t.Fatalf("runner called for bad values: %v", f.calls)
+	}
+	if err := p.CPUSet(context.Background(), "800"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(f.calls[0], " "), "sudo -n "+DefaultHelper+" cpu-set 800"; got != want {
+		t.Fatalf("call = %q, want %q", got, want)
+	}
+}
+
+func TestCPUThrottled(t *testing.T) {
+	cases := []struct {
+		out, want string
+		ok        bool
+	}{
+		{"0x50005\n", "0x50005", true},
+		{"0x0", "0x0", true},
+		{"junk\n", "", false},
+		{"0x123456789\n", "", false},
+		{"throttled=0x0\n", "", false},
+		{"0x0\n0x1\n", "", false},
+	}
+	for _, tc := range cases {
+		f := &fakeRunner{out: tc.out}
+		got, err := (Priv{R: f, Helper: DefaultHelper}).CPUThrottled(context.Background())
+		if (err == nil) != tc.ok || got != tc.want {
+			t.Errorf("out %q: got %q, err %v", tc.out, got, err)
+		}
+		if line := strings.Join(f.calls[0], " "); line != "sudo -n "+DefaultHelper+" cpu-throttled" {
+			t.Errorf("call = %q", line)
+		}
+	}
+}
