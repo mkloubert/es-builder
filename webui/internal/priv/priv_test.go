@@ -153,6 +153,25 @@ func TestCPUSet(t *testing.T) {
 	}
 }
 
+func TestWebUIInstall(t *testing.T) {
+	f := &fakeRunner{}
+	p := Priv{R: f, Helper: DefaultHelper}
+	for _, bad := range []string{"1.2", "", "01.2.3", "1.2.3;id", "v1.2.3", "1.2.3.4", "1234567.0.0"} {
+		if err := p.WebUIInstall(context.Background(), bad); err == nil {
+			t.Errorf("WebUIInstall(%q): want error", bad)
+		}
+	}
+	if len(f.calls) != 0 {
+		t.Fatalf("runner called for bad values: %v", f.calls)
+	}
+	if err := p.WebUIInstall(context.Background(), "1.2.3"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(f.calls[0], " "), "sudo -n "+DefaultHelper+" webui-install 1.2.3"; got != want {
+		t.Fatalf("call = %q, want %q", got, want)
+	}
+}
+
 func TestCPUThrottled(t *testing.T) {
 	cases := []struct {
 		out, want string

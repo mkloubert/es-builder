@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,8 @@ import (
 	"time"
 
 	"emulationstation/webui/internal/config"
+	"emulationstation/webui/internal/priv"
+	"emulationstation/webui/internal/update"
 )
 
 func TestCredentialsCommandSetsUserAndHash(t *testing.T) {
@@ -153,5 +156,48 @@ func TestCfgHolderReloadsExternalChanges(t *testing.T) {
 	h.get()
 	if n := strings.Count(logw.String(), "config reload"); n != 1 {
 		t.Fatalf("logged %d times: %q", n, logw.String())
+	}
+}
+
+func TestRunVersion(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"version"}, strings.NewReader(""), &out, &errb); code != 0 || out.String() != "0.0.0\n" {
+		t.Errorf("version: code %d, out %q", code, out.String())
+	}
+	errb.Reset()
+	run([]string{"bogus"}, strings.NewReader(""), &out, &errb)
+	if !strings.Contains(errb.String(), "version") {
+		t.Errorf("usage should list version: %q", errb.String())
+	}
+}
+
+func TestSetupUpdate(t *testing.T) {
+	cfg := config.Default()
+	cfg.Paths.StateDir = t.TempDir()
+	if u, c := setupUpdate(cfg, priv.Priv{}, "1.2.3", io.Discard); u != nil || c != nil {
+		t.Fatal("update set up although UPDATE_URL is empty")
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Paths.StateDir, "update")); err == nil {
+		t.Error("update folder created while off")
+	}
+	cfg.UpdateURL = "https://example.org/r.git"
+	cfg.UpdateSignersFile = "/etc/s"
+	cfg.UpdateSSHKeyFile = "/k"
+	cfg.UpdateKnownHostsFile = "/kh"
+	u, c := setupUpdate(cfg, priv.Priv{}, "1.2.3", io.Discard)
+	if u == nil || c == nil {
+		t.Fatal("update not set up")
+	}
+	base := filepath.Join(cfg.Paths.StateDir, "update")
+	fi, err := os.Stat(base)
+	if err != nil || !fi.IsDir() || fi.Mode().Perm() != 0o700 {
+		t.Fatalf("update folder: %v %v", fi, err)
+	}
+	want := update.Settings{URL: cfg.UpdateURL, SignersFile: "/etc/s", SSHKeyFile: "/k", KnownHostsFile: "/kh"}
+	if u.Base != base || u.Git.S != want || c.Git.S != want || c.File != filepath.Join(base, "check.json") {
+		t.Errorf("wiring wrong: %+v / %+v", u, c)
+	}
+	if c.Current != (update.Version{Major: 1, Minor: 2, Patch: 3}) || u.GOARCH == "" || u.Statfs == nil || u.Install == nil || u.Fetch == nil {
+		t.Errorf("wiring wrong: %+v / %+v", u, c)
 	}
 }

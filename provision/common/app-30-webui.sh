@@ -28,6 +28,11 @@
 #    and UI_DIR.
 #    The Go defaults are already right for the image (TLS paths, HOME_DIR, ES_SYSTEMS_CFG, LISTEN),
 #    and "credentials" writes all keys, so nothing else is set.
+#  - self-update (spec 2026-11-02-webui-self-update-design.md 3.2): web.conf gets UPDATE_URL and the
+#    three file keys. The files come from $PROVISION_DIR/update-files (signers, ssh-key,
+#    known_hosts; only the set ones exist): signers -> /etc/emulationstation-web/update-signers
+#    (root 0644), the key and known_hosts -> /home/emulationstation/.ssh/ (0600; .ssh is 0700).
+#    Other files in .ssh stay. A key without a file is written as an empty value.
 #  - /home/emulationstation/webui-custom: a copy of webui-custom/ from the provision folder (the
 #    old content is removed), owned by emulationstation, folders 0755, files 0644,
 #  - the service is enabled,
@@ -113,6 +118,38 @@ if [ -n "$sc_pw" ]; then webconf_set "$CONF" SCREENSCRAPER_PASSWORD "$sc_pw"; fi
 # Always written; an empty value means no source link in the footer (AGPL section 13).
 webconf_set "$CONF" SOURCE_URL "$CFG_SOURCE_URL"
 webconf_set "$CONF" UI_DIR "$UI"
+
+# --- Self-update (URL and optional files) ---------------------------------------------
+UF=$PROVISION_DIR/update-files
+SIGNERS=/etc/emulationstation-web/update-signers
+SSH_DIR=/home/$U/.ssh
+SSH_KEY=$SSH_DIR/webui-update
+KNOWN_HOSTS=$SSH_DIR/webui-update-known_hosts
+conf_signers="" conf_key="" conf_hosts=""
+if [ -f "$UF/signers" ]; then
+  install -m 0644 "$UF/signers" "$R$SIGNERS"
+  chown root:root "$R$SIGNERS"
+  conf_signers=$SIGNERS
+fi
+if [ -f "$UF/ssh-key" ] || [ -f "$UF/known_hosts" ]; then
+  mkdir -p "$R$SSH_DIR"
+  chown "$U:$U" "$R$SSH_DIR"
+  chmod 0700 "$R$SSH_DIR"
+  if [ -f "$UF/ssh-key" ]; then
+    install -m 0600 "$UF/ssh-key" "$R$SSH_KEY"
+    chown "$U:$U" "$R$SSH_KEY"
+    conf_key=$SSH_KEY
+  fi
+  if [ -f "$UF/known_hosts" ]; then
+    install -m 0600 "$UF/known_hosts" "$R$KNOWN_HOSTS"
+    chown "$U:$U" "$R$KNOWN_HOSTS"
+    conf_hosts=$KNOWN_HOSTS
+  fi
+fi
+webconf_set "$CONF" UPDATE_URL "$CFG_WEBUI_UPDATE_URL"
+webconf_set "$CONF" UPDATE_SIGNERS_FILE "$conf_signers"
+webconf_set "$CONF" UPDATE_SSH_KEY_FILE "$conf_key"
+webconf_set "$CONF" UPDATE_KNOWN_HOSTS_FILE "$conf_hosts"
 chown "$U:$U" "$CONF"
 chmod 0600 "$CONF"
 webconf_hash_ok "$CONF" || die "WEB_PASSWORD_HASH in web.conf is not a bcrypt hash"

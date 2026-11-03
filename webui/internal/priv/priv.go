@@ -31,6 +31,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"emulationstation/webui/internal/update"
 )
 
 // DefaultHelper is the install path of the sudo-helper.
@@ -139,6 +141,15 @@ func (p Priv) CPUSet(ctx context.Context, value string) error {
 		return fmt.Errorf("invalid cpu speed %q", value)
 	}
 	return p.run(ctx, nil, "cpu-set", value)
+}
+
+// WebUIInstall asks the root helper to install the staged web UI binary and
+// restart the service. The helper checks the version again.
+func (p Priv) WebUIInstall(ctx context.Context, version string) error {
+	if v, ok := update.ParseVersion(version); !ok || v.String() != version {
+		return fmt.Errorf("invalid web ui version %q", version)
+	}
+	return p.run(ctx, nil, "webui-install", version)
 }
 
 var throttledRe = regexp.MustCompile(`^0x[0-9a-fA-F]{1,8}$`)

@@ -125,6 +125,60 @@ vice_joy_ok() {
     grep -qx 'KeySetEnable=1' "$rc" && grep -qx 'KeySet1Fire=32' "$rc" && grep -qx 'KeySet2Fire=13' "$rc" &&
     grep -qx '0 1 2 2 0 1' "$R/opt/retropie/configs/c64/sdl-joymap-C64.vjm" 2>/dev/null
 }
+# webui_install_ok : the self-update script is a root file with mode 0755 (spec
+# 2026-11-02-webui-self-update-design.md 3.2). The owner is checked when the check runs as root
+# (a test root of a normal user has other owners).
+webui_install_ok() {
+  local f=$R/usr/local/lib/emulationstation/webui-install
+  [ -f "$f" ] && [ ! -L "$f" ] && [ "$(stat -c %a "$f" 2>/dev/null)" = 755 ] || return 1
+  [ "$(id -u)" -ne 0 ] || [ "$(stat -c %u "$f")" = 0 ]
+}
+# webui_version_ok : "emulationstation-web version" prints x.y.z. The binary runs only if it fits the
+# CPU of this host; for a foreign CPU the caller prints a SKIP line (see webui_version_runnable).
+webui_version_ok() {
+  local out
+  out=$(timeout 10 "$R/usr/local/bin/emulationstation-web" version 2>/dev/null </dev/null) || return 1
+  [[ $out =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+# webui_version_runnable : true if the web binary is a script or an ELF file for the CPU of this host
+webui_version_runnable() {
+  local kind
+  kind=$(file -b "$R/usr/local/bin/emulationstation-web" 2>/dev/null) || return 1
+  case "$kind" in
+    *ELF*)
+      case "$(uname -m)" in
+        x86_64) [[ $kind == *x86-64* ]] ;;
+        aarch64 | arm64) [[ $kind == *aarch64* ]] ;;
+        *) return 1 ;;
+      esac
+      ;;
+    *) return 0 ;;
+  esac
+}
+# webui_ssh_ok : the deploy key files of the self-update (when set) have the right owner and modes
+webui_ssh_ok() {
+  owned_by_es home/emulationstation/.ssh 700 &&
+    owned_by_es home/emulationstation/.ssh/webui-update 600 &&
+    { [ ! -e "$R/home/emulationstation/.ssh/webui-update-known_hosts" ] ||
+      owned_by_es home/emulationstation/.ssh/webui-update-known_hosts 600; }
+}
+checks_webui_update() {
+  local k
+  check "webui-install: root file, mode 755" webui_install_ok
+  for k in UPDATE_URL UPDATE_SIGNERS_FILE UPDATE_SSH_KEY_FILE UPDATE_KNOWN_HOSTS_FILE; do
+    check "web.conf: $k present" web_conf_key "$k"
+  done
+  if webui_version_runnable; then
+    check "emulationstation-web version prints x.y.z" webui_version_ok
+  else
+    echo "SKIP: emulationstation-web version (the binary is for another CPU than this host)"
+  fi
+  if [ -e "$R/home/emulationstation/.ssh/webui-update" ]; then
+    check "self-update SSH key: .ssh 700, key and known_hosts 600, owner emulationstation" webui_ssh_ok
+  else
+    echo "SKIP: self-update SSH key (no key file in the image)"
+  fi
+}
 ui_dir_set() { grep -qx 'UI_DIR=/home/emulationstation/webui-custom' "$R/etc/emulationstation-web/web.conf" 2>/dev/null; }
 machine_id_unset() { [ "$(cat "$R/etc/machine-id" 2>/dev/null)" = uninitialized ]; }
 no_host_keys() { ! compgen -G "$R/etc/ssh/ssh_host_*" >/dev/null; }

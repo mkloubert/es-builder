@@ -383,7 +383,7 @@ run_app30() {
   : >"$r/etc/emulationstation-web/tls/server.key"
   : >"$r/etc/emulationstation-web/tls/server.crt"
   : >"$r/etc/systemd/system/emulationstation-web.service"
-  printf 'WEB_USER=u\nWEB_PASSWORD=pw123456\n' >"$BATS_TEST_TMPDIR/build.env"
+  printf 'WEB_USER=u\nWEB_PASSWORD=pw123456\n%s' "${APP30_ENV_EXTRA-}" >"$BATS_TEST_TMPDIR/build.env"
   local c
   printf '#!/bin/bash\nexit 0\n' >"$d/systemctl"
   printf '#!/bin/bash\nprintf "%%s\\n" "$*" >>"%s/chown.log"\n' "$BATS_TEST_TMPDIR" >"$d/chown"
@@ -440,6 +440,70 @@ run_app30() {
   [ "$status" -eq 0 ]
   [ -d "$ui" ]
   [ -z "$(ls -A "$ui")" ]
+}
+
+# --- app-30-webui.sh: self-update keys and files (spec 2026-11-02-webui-self-update-design.md 3.2) ---
+
+@test "app-30-webui.sh: without update files web.conf has the four keys and no file is made" {
+  local r="$BATS_TEST_TMPDIR/root" c
+  run_app30 0
+  [ "$status" -eq 0 ]
+  c="$r/etc/emulationstation-web/web.conf"
+  grep -qx 'UPDATE_URL=https://github.com/mkloubert/es-builder' "$c"
+  grep -qx 'UPDATE_SIGNERS_FILE=' "$c"
+  grep -qx 'UPDATE_SSH_KEY_FILE=' "$c"
+  grep -qx 'UPDATE_KNOWN_HOSTS_FILE=' "$c"
+  [ ! -e "$r/etc/emulationstation-web/update-signers" ]
+  [ ! -e "$r/home/emulationstation/.ssh" ]
+}
+
+@test "app-30-webui.sh: WEBUI_UPDATE_URL from build.env goes to web.conf; empty means off" {
+  local r="$BATS_TEST_TMPDIR/root"
+  APP30_ENV_EXTRA=$'WEBUI_UPDATE_URL=ssh://git@host/a/b.git\n' run_app30 0
+  [ "$status" -eq 0 ]
+  grep -qx 'UPDATE_URL=ssh://git@host/a/b.git' "$r/etc/emulationstation-web/web.conf"
+  APP30_ENV_EXTRA=$'WEBUI_UPDATE_URL=\n' run_app30 0
+  [ "$status" -eq 0 ]
+  grep -qx 'UPDATE_URL=' "$r/etc/emulationstation-web/web.conf"
+}
+
+@test "app-30-webui.sh: update files are installed with owner and modes, other files in .ssh stay" {
+  local r="$BATS_TEST_TMPDIR/root" u="$BATS_TEST_TMPDIR/prov/update-files" ssh c
+  ssh="$r/home/emulationstation/.ssh"
+  mkdir -p "$u" "$ssh"
+  printf 'signers\n' >"$u/signers"
+  printf 'key\n' >"$u/ssh-key"
+  printf 'hosts\n' >"$u/known_hosts"
+  printf 'mine\n' >"$ssh/authorized_keys"
+  chmod 0644 "$ssh"
+  run_app30 0
+  [ "$status" -eq 0 ]
+  c="$r/etc/emulationstation-web/web.conf"
+  grep -qx 'UPDATE_SIGNERS_FILE=/etc/emulationstation-web/update-signers' "$c"
+  grep -qx 'UPDATE_SSH_KEY_FILE=/home/emulationstation/.ssh/webui-update' "$c"
+  grep -qx 'UPDATE_KNOWN_HOSTS_FILE=/home/emulationstation/.ssh/webui-update-known_hosts' "$c"
+  [ "$(stat -c %a "$r/etc/emulationstation-web/update-signers")" = 644 ]
+  [ "$(cat "$r/etc/emulationstation-web/update-signers")" = signers ]
+  [ "$(stat -c %a "$ssh/webui-update")" = 600 ]
+  [ "$(stat -c %a "$ssh/webui-update-known_hosts")" = 600 ]
+  [ "$(stat -c %a "$ssh")" = 700 ]
+  [ "$(cat "$ssh/authorized_keys")" = mine ]
+  grep -qx "root:root $r/etc/emulationstation-web/update-signers" "$BATS_TEST_TMPDIR/chown.log"
+  grep -qx "emulationstation:emulationstation $ssh" "$BATS_TEST_TMPDIR/chown.log"
+  grep -qx "emulationstation:emulationstation $ssh/webui-update" "$BATS_TEST_TMPDIR/chown.log"
+  grep -qx "emulationstation:emulationstation $ssh/webui-update-known_hosts" "$BATS_TEST_TMPDIR/chown.log"
+  run ! grep -q "authorized_keys" "$BATS_TEST_TMPDIR/chown.log"
+}
+
+@test "app-30-webui.sh: only the signers file set -> only that file is installed" {
+  local r="$BATS_TEST_TMPDIR/root" u="$BATS_TEST_TMPDIR/prov/update-files"
+  mkdir -p "$u"
+  printf 'signers\n' >"$u/signers"
+  run_app30 0
+  [ "$status" -eq 0 ]
+  [ -f "$r/etc/emulationstation-web/update-signers" ]
+  [ ! -e "$r/home/emulationstation/.ssh" ]
+  grep -qx 'UPDATE_SSH_KEY_FILE=' "$r/etc/emulationstation-web/web.conf"
 }
 
 @test "priv usb-mount: an existing plain directory is not created or changed again" {
@@ -733,4 +797,242 @@ pol() { cat "$SYSR/sys/devices/system/cpu/cpufreq/policy$1/scaling_max_freq"; }
   run "$PRIV" cpu-throttled
   [ "$status" -eq 2 ]
   [ ! -s "$CALLS" ]
+}
+
+# --- webui-install (self-update, spec 2026-11-02 section 3.5) ---
+
+# wi_setup : sandbox folders, a good fake ELF for the host arch, stubs for the unit calls
+wi_setup() {
+  export PRIV_TEST_UPDATE="$BATS_TEST_TMPDIR/upd"
+  export PRIV_TEST_INSTALL="$BATS_TEST_TMPDIR/inst"
+  export PRIV_TEST_USER
+  PRIV_TEST_USER=$(id -un)
+  mkdir -p "$PRIV_TEST_UPDATE"
+  SRC="$PRIV_TEST_UPDATE/emulationstation-web"
+  stub uname 'echo x86_64'
+  stub systemd-run
+  stub systemctl 'exit 3'
+  wi_elf "$SRC" '\x3e\x00'
+}
+
+# wi_elf <file> <machine-escape> : writes a fake 64-bit little endian ELF header plus padding
+wi_elf() {
+  printf '\x7f\x45\x4c\x46\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00%b\x01\x00\x00\x00pad' "$2" >"$1"
+}
+
+@test "priv: webui-install starts the unit and keeps a copy" {
+  need_nonroot
+  wi_setup
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 0 ]
+  grep -qxF 'systemd-run --unit=emulationstation-webui-install --collect --no-block /usr/local/lib/emulationstation/webui-install 1.2.3' "$CALLS"
+  [ -f "$PRIV_TEST_INSTALL/new" ]
+  [ ! -e "$PRIV_TEST_INSTALL/new.tmp" ]
+  cmp "$SRC" "$PRIV_TEST_INSTALL/new"
+}
+
+@test "priv: webui-install accepts an aarch64 ELF on aarch64" {
+  need_nonroot
+  wi_setup
+  stub uname 'echo aarch64'
+  wi_elf "$SRC" '\xb7\x00'
+  run "$PRIV" webui-install 0.0.1
+  [ "$status" -eq 0 ]
+}
+
+@test "priv: webui-install rejects bad versions, no unit call" {
+  need_nonroot
+  wi_setup
+  local bad
+  for bad in 1.2 01.2.3 '1.2.3;x' '' 1.2.3.4 1.2.-3 1234567.0.0 ' 1.2.3' $'1.2.3\n' v1.2.3; do
+    run "$PRIV" webui-install "$bad"
+    [ "$status" -eq 2 ] || { echo "accepted: [$bad]"; return 1; }
+  done
+  run "$PRIV" webui-install
+  [ "$status" -eq 2 ]
+  run "$PRIV" webui-install 1.2.3 extra
+  [ "$status" -eq 2 ]
+  run -1 grep -q systemd-run "$CALLS"
+  [ ! -e "$PRIV_TEST_INSTALL/new" ]
+}
+
+@test "priv: webui-install refuses a missing source" {
+  need_nonroot
+  wi_setup
+  rm "$SRC"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  run -1 grep -q systemd-run "$CALLS"
+}
+
+@test "priv: webui-install refuses a symlink to a fake shadow file" {
+  need_nonroot
+  wi_setup
+  printf 'root:x:0:0\n' >"$BATS_TEST_TMPDIR/shadow"
+  rm "$SRC"
+  ln -s "$BATS_TEST_TMPDIR/shadow" "$SRC"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  run -1 grep -q systemd-run "$CALLS"
+  [ ! -e "$PRIV_TEST_INSTALL/new" ]
+  [ ! -e "$PRIV_TEST_INSTALL/new.tmp" ]
+}
+
+@test "priv: webui-install refuses a hardlink count of 2" {
+  need_nonroot
+  wi_setup
+  ln "$SRC" "$BATS_TEST_TMPDIR/other"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  run -1 grep -q systemd-run "$CALLS"
+}
+
+@test "priv: webui-install refuses a wrong owner" {
+  need_nonroot
+  wi_setup
+  export PRIV_TEST_USER=nobody-else-here
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  run -1 grep -q systemd-run "$CALLS"
+}
+
+@test "priv: webui-install refuses a directory as source" {
+  need_nonroot
+  wi_setup
+  rm "$SRC"
+  mkdir "$SRC"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+}
+
+@test "priv: webui-install refuses a file over 100 MB" {
+  need_nonroot
+  wi_setup
+  truncate -s 104857601 "$SRC"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  run -1 grep -q systemd-run "$CALLS"
+  [ ! -e "$PRIV_TEST_INSTALL/new" ]
+}
+
+@test "priv: webui-install accepts a file of exactly 100 MB" {
+  need_nonroot
+  wi_setup
+  truncate -s 104857600 "$SRC"
+  wi_elf "$BATS_TEST_TMPDIR/head" '\x3e\x00'
+  dd if="$BATS_TEST_TMPDIR/head" of="$SRC" conv=notrunc status=none
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 0 ]
+}
+
+@test "priv: webui-install refuses text, short files and the wrong arch" {
+  need_nonroot
+  wi_setup
+  printf 'ASCII text, not a program\n' >"$SRC"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  : >"$SRC"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  wi_elf "$SRC" '\xb7\x00'
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  wi_elf "$SRC" '\x28\x00'
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  # 32-bit class and big endian
+  printf '\x7f\x45\x4c\x46\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00pad' >"$SRC"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  printf '\x7f\x45\x4c\x46\x02\x02\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00pad' >"$SRC"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  run -1 grep -q systemd-run "$CALLS"
+  [ ! -e "$PRIV_TEST_INSTALL/new" ]
+  [ ! -e "$PRIV_TEST_INSTALL/new.tmp" ]
+}
+
+@test "priv: webui-install refuses an unknown architecture" {
+  need_nonroot
+  wi_setup
+  stub uname 'echo riscv64'
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+}
+
+@test "priv: webui-install exits 1 when the unit is busy, nothing is copied" {
+  need_nonroot
+  wi_setup
+  stub systemctl 'exit 0'
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 1 ]
+  run -1 grep -q systemd-run "$CALLS"
+  grep -qx 'systemctl is-active --quiet emulationstation-webui-install' "$CALLS"
+  [ ! -e "$PRIV_TEST_INSTALL/new" ]
+}
+
+@test "priv: webui-install exits 1 when systemd-run fails" {
+  need_nonroot
+  wi_setup
+  stub systemd-run 'exit 1'
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 1 ]
+}
+
+@test "priv: webui-install replaces an old copy" {
+  need_nonroot
+  wi_setup
+  mkdir -p "$PRIV_TEST_INSTALL"
+  printf 'old' >"$PRIV_TEST_INSTALL/new"
+  printf 'old' >"$PRIV_TEST_INSTALL/new.tmp"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 0 ]
+  cmp "$SRC" "$PRIV_TEST_INSTALL/new"
+}
+
+@test "priv: usage lists webui-install" {
+  run "$PRIV"
+  [[ "$output" == *"webui-install <version>"* ]]
+}
+
+@test "priv: webui-install stops a copy over 100 MB that passed the stat check" {
+  need_nonroot
+  wi_setup
+  truncate -s 110000000 "$SRC"
+  wi_elf "$BATS_TEST_TMPDIR/head" '\x3e\x00'
+  dd if="$BATS_TEST_TMPDIR/head" of="$SRC" conv=notrunc status=none
+  stub stat 'echo "$(id -un) 1 100 regular file"'
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  run -1 grep -q systemd-run "$CALLS"
+  [ ! -e "$PRIV_TEST_INSTALL/new" ]
+  [ ! -e "$PRIV_TEST_INSTALL/new.tmp" ]
+}
+
+@test "priv: webui-install does not hang on a FIFO that passed the stat check" {
+  need_nonroot
+  wi_setup
+  stub stat 'echo "$(id -un) 1 100 regular file"'
+  stub timeout 'shift; exec /usr/bin/timeout 2 "$@"'
+  rm "$SRC"
+  mkfifo "$SRC"
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  [ ! -e "$PRIV_TEST_INSTALL/new" ]
+  [ ! -e "$PRIV_TEST_INSTALL/new.tmp" ]
+}
+
+@test "priv: webui-install refuses a copy that is a symlink, the victim mode stays" {
+  need_nonroot
+  wi_setup
+  printf 'victim' >"$BATS_TEST_TMPDIR/victim"
+  chmod 0600 "$BATS_TEST_TMPDIR/victim"
+  # cp makes new.tmp a symlink, as if the source was swapped after the stat check
+  stub cp 'ln -s "$BATS_TEST_TMPDIR/victim" "${@: -1}"'
+  run "$PRIV" webui-install 1.2.3
+  [ "$status" -eq 2 ]
+  [ "$(stat -c %a "$BATS_TEST_TMPDIR/victim")" = 600 ]
+  [ ! -e "$PRIV_TEST_INSTALL/new" ]
+  [ ! -L "$PRIV_TEST_INSTALL/new.tmp" ]
+  run -1 grep -q systemd-run "$CALLS"
 }

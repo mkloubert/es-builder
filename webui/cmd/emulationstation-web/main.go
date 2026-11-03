@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,11 +43,15 @@ import (
 	"emulationstation/webui/internal/roms"
 	"emulationstation/webui/internal/sysinfo"
 	"emulationstation/webui/internal/systems"
+	"emulationstation/webui/internal/update"
 	"emulationstation/webui/internal/usb"
 	"emulationstation/webui/internal/web"
 )
 
 const defaultConfig = "/etc/emulationstation-web/web.conf"
+
+// version is set at build time: -ldflags "-X main.version=x.y.z".
+var version = "0.0.0"
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
@@ -66,8 +71,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdPasswd(args, stdin, stdout, stderr)
 	case "guid":
 		return cmdGUID(args, stdout, stderr)
+	case "version":
+		fmt.Fprintln(stdout, version)
+		return 0
 	default:
-		fmt.Fprintf(stderr, "unknown command %q\nusage: emulationstation-web [serve|credentials|passwd|guid] [--config P]\n", cmd)
+		fmt.Fprintf(stderr, "unknown command %q\nusage: emulationstation-web [serve|credentials|passwd|guid|version] [--config P]\n", cmd)
 		return 2
 	}
 }
@@ -192,6 +200,38 @@ func (h *cfgHolder) set(c *config.Config) error {
 	return nil
 }
 
+// setupUpdate <cfg> <p> <ver> <logw> : builds the self-update parts. Both
+// results are nil when UPDATE_URL is empty. A failing state folder is logged
+// and the web UI keeps serving.
+func setupUpdate(cfg *config.Config, p priv.Priv, ver string, logw io.Writer) (*update.Updater, *update.Checker) {
+	if cfg.UpdateURL == "" {
+		return nil, nil
+	}
+	base := filepath.Join(cfg.Paths.StateDir, "update")
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		fmt.Fprintln(logw, "update folder:", err)
+	}
+	g := update.Git{R: update.ExecRunner{}, S: update.Settings{
+		URL:            cfg.UpdateURL,
+		SignersFile:    cfg.UpdateSignersFile,
+		SSHKeyFile:     cfg.UpdateSSHKeyFile,
+		KnownHostsFile: cfg.UpdateKnownHostsFile,
+	}}
+	cur, _ := update.ParseVersion(ver)
+	up := &update.Updater{
+		Git:     g,
+		Fetch:   update.HTTPFetcher{},
+		R:       update.ExecRunner{},
+		Install: func(ctx context.Context, v string) error { return p.WebUIInstall(ctx, v) },
+		Statfs:  update.DiskFree,
+		Base:    base,
+		UIDir:   cfg.UIDir,
+		GOARCH:  runtime.GOARCH,
+	}
+	ck := &update.Checker{Git: g, File: filepath.Join(base, "check.json"), Current: cur}
+	return up, ck
+}
+
 func serve(ctx context.Context, cfgPath string, logw io.Writer) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -225,6 +265,11 @@ func serve(ctx context.Context, cfgPath string, logw io.Writer) error {
 	runner := priv.ExecRunner{}
 	privHelper := priv.Priv{R: runner, Helper: helper}
 
+	updater, checker := setupUpdate(cfg, privHelper, version, logw)
+	if checker != nil {
+		go checker.Run(ctx)
+	}
+
 	var btMgr *bluetooth.Manager
 	mgr := &bluetooth.Manager{}
 	if bus, err := bluetooth.NewDBus(mgr.Window()); err != nil {
@@ -252,8 +297,11 @@ func serve(ctx context.Context, cfgPath string, logw io.Writer) error {
 			Config:  holder.get,
 			Systems: func() []systems.System { return sysList },
 		},
-		Runner: runner,
-		LogW:   logw,
+		Runner:  runner,
+		LogW:    logw,
+		Update:  updater,
+		Checker: checker,
+		Version: version,
 	})
 	err = web.ListenAndServeTLS(ctx, cfg, h)
 	cancel()

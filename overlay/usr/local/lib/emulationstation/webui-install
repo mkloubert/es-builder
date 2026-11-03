@@ -1,0 +1,162 @@
+#!/bin/bash
+# EmuStation Builder
+# Copyright (C) 2026  Marcel Joachim Kloubert
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Installs the new web UI binary and checks it. Started by "priv webui-install <version>" in the
+# unit emulationstation-webui-install. It is not in sudoers. It runs as root.
+# Steps: put the new binary in place with a rename, restart the service, ask /healthz for up to
+# 60 seconds, then write "ok <version>" or roll back and write "rolled-back <version>" (or
+# "failed <version>" when even the rollback failed) to
+# /run/emulationstation/webui-update.status.
+# Exit codes: 0 = installed, 1 = rolled back, 2 = bad input. On exit 2 with a valid version
+# (no new binary) the status is "failed <version>". An invalid version writes no status.
+#
+# Deviation from the project shebang rule (#!/usr/bin/env bash): this script runs as root, so it
+# uses the fixed path /bin/bash and does not look up bash through PATH.
+set -euo pipefail
+
+# Do not trust the caller's PATH. Tests may set PRIV_TEST_PATH, but only when not running as root.
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+if [ "$EUID" -ne 0 ] && [ -n "${PRIV_TEST_PATH:-}" ]; then
+  PATH=$PRIV_TEST_PATH
+fi
+export PATH
+
+INSTALL_DIR=/var/lib/emulationstation-webui-install
+BIN_DIR=/usr/local/bin
+RUN_DIR=/run/emulationstation
+WEB_USER=emulationstation
+OWNER=(-o root -g root)
+if [ "$EUID" -ne 0 ]; then
+  if [ -n "${PRIV_TEST_INSTALL:-}" ]; then INSTALL_DIR=$PRIV_TEST_INSTALL; fi
+  if [ -n "${PRIV_TEST_BIN:-}" ]; then
+    BIN_DIR=$PRIV_TEST_BIN
+    OWNER=()
+  fi
+  if [ -n "${PRIV_TEST_RUN:-}" ]; then RUN_DIR=$PRIV_TEST_RUN; fi
+  if [ -n "${PRIV_TEST_USER:-}" ]; then WEB_USER=$PRIV_TEST_USER; fi
+fi
+STATUS_FILE=$RUN_DIR/webui-update.status
+HEALTH_URL=https://127.0.0.1:11944/healthz
+# 15 tries of at most 2 s each, with 2 s sleeps between them: about 60 s in all
+TRIES=15
+
+# log <text> : one line to the journal (stderr)
+log() { printf 'webui-install: %s\n' "$1" >&2; }
+
+# run_as_web <cmd> [args] : runs the command as the web user. Root must never write into the status
+# folder, because the web user owns it and could swap names for symlinks. Tests (not root) run
+# the command directly.
+run_as_web() {
+  if [ "$EUID" -eq 0 ]; then
+    setpriv --reuid="$WEB_USER" --regid="$WEB_USER" --init-groups -- "$@"
+  else
+    "$@"
+  fi
+}
+
+# write_status <word> : writes "<word> <version>" as the web user with a temp file and a rename
+# (mv -T replaces a symlink at the status path and never follows it)
+write_status() {
+  # shellcheck disable=SC2016
+  run_as_web /bin/bash -c '
+    set -euo pipefail
+    tmp=$(mktemp "$1/.webui-update.XXXXXX")
+    if ! { printf "%s %s\n" "$3" "$4" >"$tmp" && chmod 0644 "$tmp" && mv -fT -- "$tmp" "$2"; }; then
+      rm -f -- "$tmp"
+      exit 1
+    fi' _ "$RUN_DIR" "$STATUS_FILE" "$1" "$version"
+}
+
+# healthy : the service answers /healthz with the new version
+healthy() {
+  local body
+  body=$(curl -sk --max-time 2 --max-filesize 4096 -- "$HEALTH_URL" 2>/dev/null | head -c 4096) || return 1
+  grep -qF -- "\"version\":\"$version\"" <<<"$body"
+}
+
+swapped=0
+had_prev=0
+
+# rollback : every failure ends here. Put the old binary back if possible, try a restart, write
+# the status ("rolled-back", or "failed" when the old binary could not be put back), exit 1.
+rollback() {
+  local word=rolled-back
+  log "$1, rolling back"
+  rm -f -- "$cur.new"
+  if [ "$swapped" -eq 1 ]; then
+    if [ "$had_prev" -eq 1 ]; then
+      mv -f -- "$cur.prev" "$cur" || { log "could not put the old binary back"; word=failed; }
+    else
+      rm -f -- "$cur" || { log "could not remove the new binary"; word=failed; }
+    fi
+  fi
+  # The failed restarts may have hit the start limit. Reset it, or the restart below is refused.
+  systemctl reset-failed emulationstation-web.service || log "could not reset the failed state"
+  if systemctl restart emulationstation-web.service; then
+    log "the web service was restarted"
+  else
+    log "the web service could not be restarted"
+  fi
+  write_status "$word" || log "could not write the status"
+  rm -f -- "$new"
+  log "result: $word"
+  exit 1
+}
+
+[ $# -eq 1 ] || { log "needs one version"; exit 2; }
+version=$1
+ver_re='^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$'
+[[ $version =~ $ver_re ]] || { log "invalid version"; exit 2; }
+
+new=$INSTALL_DIR/new
+cur=$BIN_DIR/emulationstation-web
+mkdir -p -- "$RUN_DIR"
+if [ -L "$new" ] || [ ! -f "$new" ]; then
+  log "no new binary"
+  write_status failed || log "could not write the status"
+  exit 2
+fi
+
+log "putting the new binary in place"
+rm -f -- "$cur.new"
+install -m 0755 "${OWNER[@]}" -- "$new" "$cur.new" || rollback "could not install the new binary"
+if [ -f "$cur" ] && [ ! -L "$cur" ]; then
+  ln -f -- "$cur" "$cur.prev" || rollback "could not keep the old binary"
+  had_prev=1
+fi
+mv -f -- "$cur.new" "$cur" || rollback "could not move the new binary in place"
+swapped=1
+
+log "restarting the web service"
+systemctl restart emulationstation-web.service || log "the restart command failed"
+
+ok=0
+i=0
+while [ "$i" -lt "$TRIES" ]; do
+  if healthy; then
+    ok=1
+    break
+  fi
+  i=$((i + 1))
+  if [ "$i" -lt "$TRIES" ]; then sleep 2; fi
+done
+
+[ "$ok" -eq 1 ] || rollback "the new version does not answer"
+log "the new version answers, update done"
+write_status ok || log "could not write the status"
+rm -f -- "$new"
+exit 0

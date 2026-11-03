@@ -17,7 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */ -}}
 {{define "subtitle"}}Power, updates, logs and web UI tools.{{end}}
 {{define "content"}}{{with .Data}}
-<div x-data="{ tab: 'logs' }">
+<div x-data="{ tab: location.hash === '#webui' ? 'webui' : 'logs' }">
   <div class="tabs mb-5" role="tablist" aria-label="System">
     <button type="button" role="tab" @click="tab = 'power'" :aria-selected="tab === 'power'">Power</button>
     <button type="button" role="tab" @click="tab = 'updates'" :aria-selected="tab === 'updates'">Updates</button>
@@ -69,7 +69,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   </section>
 
   <section x-show="tab === 'webui'" role="tabpanel" aria-label="Web UI" style="display:none">
-    {{template "custom_ui" .UI}}
+    {{template "webui_update" .WebUI}}
+    <div class="mt-5">{{template "custom_ui" .UI}}</div>
   </section>
 </div>
 {{end}}{{end}}

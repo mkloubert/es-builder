@@ -66,6 +66,7 @@ type sysPageView struct {
 	Bans  bansView
 	UI    uiState
 	CPU   cpu.State
+	WebUI webUIView
 }
 
 func (s *Server) bans(ctx context.Context) bansView {
@@ -81,7 +82,7 @@ func (s *Server) bans(ctx context.Context) bansView {
 }
 
 func (s *Server) handleSystemPage(w http.ResponseWriter, r *http.Request) {
-	s.page(w, r, "system", "System", sysPageView{Units: logUnits, Bans: s.bans(r.Context()), UI: *s.ui.Load(), CPU: cpu.Read(s.d.Sysinfo.Root)})
+	s.page(w, r, "system", "System", sysPageView{Units: logUnits, Bans: s.bans(r.Context()), UI: *s.ui.Load(), CPU: cpu.Read(s.d.Sysinfo.Root), WebUI: s.webUIView()})
 }
 
 // handleUIReload parses the templates again (custom folder over the built-in files).

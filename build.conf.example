@@ -44,6 +44,17 @@ TLS_EXTRA_SANS=
 # empty = no link. Default: upstream repository (for a fork, enter your own URL).
 SOURCE_URL=https://github.com/mkloubert/es-builder
 
+# --- Web UI self-update (see README "Web UI self-update") ------------------
+# Repository the web UI updates from (https://, ssh://, user@host:path, file:// or a folder).
+# Empty = self-update off.
+WEBUI_UPDATE_URL=https://github.com/mkloubert/es-builder
+# File (path in this repository) with allowed signers; set = tags must be signed. Empty = not checked.
+WEBUI_UPDATE_SIGNERS=
+# Private SSH key without passphrase (a read-only deploy key), e.g. update-keys/deploy-key.
+WEBUI_UPDATE_SSH_KEY=
+# known_hosts file for the SSH host (needed when WEBUI_UPDATE_SSH_KEY is set).
+WEBUI_UPDATE_KNOWN_HOSTS=
+
 # --- Wi-Fi (optional; empty = LAN/DHCP only) -----------------------------------
 # WIFI_COUNTRY: two capital letters. On the Raspberry Pi it sets the Wi-Fi channels of your
 # country. Wi-Fi is on in any case; without a country it uses fewer, safe channels.

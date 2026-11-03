@@ -230,6 +230,22 @@ window.uploader = function () {
   };
 };
 
+// waitRestart: after a web UI update, wait until the service is down and up
+// again, then reload. /healthz is for the loopback only, so a static file is
+// used. After 30 s the page reloads anyway, in case the restart was missed.
+window.waitRestart = function () {
+  var down = false, started = Date.now();
+  (function poll() {
+    fetch("/static/app.js", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("down"); })
+      .then(function () {
+        if (down || Date.now() - started > 30000) location.reload();
+        else setTimeout(poll, 2000);
+      })
+      .catch(function () { down = true; setTimeout(poll, 2000); });
+  })();
+};
+
 // jobView: live job progress through Server-Sent Events.
 window.jobView = function (ds) {
   var labels = { queued: "Queued", running: "Running …", done: "Done", failed: "Failed", aborted: "Aborted" };
@@ -256,9 +272,11 @@ window.jobView = function (ds) {
           if (self.$refs.log) self.$refs.log.scrollTop = self.$refs.log.scrollHeight;
         });
         if (self.finished) es.close();
+        if (self.finished && self.link === "#restart") window.waitRestart();
       };
       es.onerror = function () {
         if (self.finished) es.close();
+        else if (self.link === "#restart") { es.close(); window.waitRestart(); }
       };
     },
   };

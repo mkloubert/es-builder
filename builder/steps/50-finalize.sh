@@ -40,6 +40,9 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 . "$ROOT/builder/lib/image.sh"
 # shellcheck source=builder/lib/cache.sh
 . "$ROOT/builder/lib/cache.sh"
+# for app_web_version (step 40 only runs main when it is started directly)
+# shellcheck source=builder/steps/40-provision-app.sh
+. "$ROOT/builder/steps/40-provision-app.sh"
 
 FINALIZE_BUFFER_MIB=16
 # virtual disk size of the VM qcow2 (sparse, costs no space; root grows to it at the first boot)
@@ -106,6 +109,7 @@ finalize_report_section() {
   printf 'EPIC Noir theme: %s\n' "${CFG_EPICNOIR_REF:-}"
   printf 'xpadneo: %s\n' "${CFG_XPADNEO_REF:-}"
   printf 'Cache key: %s\n' "$key"
+  printf 'web UI version: %s, self-update: %s\n' "$(app_web_version "$ROOT")" "${CFG_WEBUI_UPDATE_URL:-off}"
   if [ ! -f "$modrep" ]; then
     printf 'Failed modules: unknown (module report %s is missing)\n' "$modrep"
   elif [ ! -s "$modrep" ]; then

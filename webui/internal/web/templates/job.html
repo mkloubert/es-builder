@@ -32,8 +32,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <pre x-ref="log" class="max-h-96 overflow-auto whitespace-pre-wrap border border-line bg-surface p-4 font-mono text-[12px] leading-relaxed text-muted" x-text="log.length ? log.join('\n') : 'No output yet.'"></pre>
   </section>
   <div class="flex flex-wrap gap-3">
-    <a x-show="link" {{if not .Job.Link}}style="display:none"{{end}} href="{{.Job.Link}}" :href="link" class="btn btn-primary">{{icon "arrow-up-right"}}Review files</a>
-    <a x-show="finished" style="display:none" href="/games" class="btn">Go to games</a>
+    <a x-show="link && link !== '#restart'" {{if or (not .Job.Link) (eq .Job.Link "#restart")}}style="display:none"{{end}} href="{{.Job.Link}}" :href="link" class="btn btn-primary">{{icon "arrow-up-right"}}Review files</a>
+    <a x-show="finished && link !== '#restart'" style="display:none" href="/games" class="btn">Go to games</a>
+    <p x-show="link === '#restart'" {{if ne .Job.Link "#restart"}}style="display:none"{{end}} class="banner banner-info">Restarting…</p>
   </div>
 </div>
 {{end}}{{end}}

@@ -18,10 +18,10 @@
 # Root helper for the web UI. Called as: sudo -n /usr/local/lib/emulationstation/priv <cmd> [arg]
 # Commands: reboot, poweroff, apt-update, apt-upgrade, f2b-list, f2b-unban <ip>, journal <unit>,
 # usb-list, usb-mount <device>, usb-umount, cpu-set <max|1200|1000|800|600>, cpu-apply,
-# cpu-throttled.
+# cpu-throttled, webui-install <x.y.z>.
 # Exit codes: 2 = usage error or invalid argument; 3 = the USB devices could not be read (usb-list,
 # usb-mount) or the throttle state could not be read (cpu-throttled); other codes come from the
-# command that ran.
+# command that ran. webui-install also uses 1 when the install unit is busy or cannot start.
 #
 # Deviation from the project shebang rule (#!/usr/bin/env bash): this script runs as root, so it
 # uses the fixed path /bin/bash and does not look up bash through PATH.
@@ -36,7 +36,7 @@ export PATH
 
 usage() {
   printf 'priv: %s\n' "$1" >&2
-  printf 'Usage: priv reboot|poweroff|apt-update|apt-upgrade|f2b-list|f2b-unban <ip>|journal <unit>|usb-list|usb-mount <device>|usb-umount|cpu-set <max|1200|1000|800|600>|cpu-apply|cpu-throttled\n' >&2
+  printf 'Usage: priv reboot|poweroff|apt-update|apt-upgrade|f2b-list|f2b-unban <ip>|journal <unit>|usb-list|usb-mount <device>|usb-umount|cpu-set <max|1200|1000|800|600>|cpu-apply|cpu-throttled|webui-install <version>\n' >&2
   exit 2
 }
 
@@ -211,6 +211,50 @@ cpu_save() {
   fi
 }
 
+# Web UI self-update (spec 2026-11-02-webui-self-update-design.md, section 3.5). The staged binary is
+# written by the web user, so every check is done again here, on the root copy too. Tests may move
+# the folders and the owner name (PRIV_TEST_*), but only when not running as root.
+WI_UPDATE=/var/lib/emulationstation-web/update
+WI_INSTALL=/var/lib/emulationstation-webui-install
+WI_USER=emulationstation
+WI_OWNER=(-o root -g root)
+if [ "$EUID" -ne 0 ]; then
+  if [ -n "${PRIV_TEST_UPDATE:-}" ]; then WI_UPDATE=$PRIV_TEST_UPDATE; fi
+  if [ -n "${PRIV_TEST_INSTALL:-}" ]; then
+    WI_INSTALL=$PRIV_TEST_INSTALL
+    WI_OWNER=()
+  fi
+  if [ -n "${PRIV_TEST_USER:-}" ]; then WI_USER=$PRIV_TEST_USER; fi
+fi
+WI_MAX_BYTES=104857600
+
+# wi_elf_ok <file> : a 64-bit little endian ELF file for the own CPU (header read with od)
+wi_elf_ok() {
+  local hex machine
+  case "$(uname -m)" in
+    x86_64) machine=3e00 ;;
+    aarch64) machine=b700 ;;
+    *) return 1 ;;
+  esac
+  hex=$(head -c 20 -- "$1" | od -An -tx1 -v | tr -d ' \n') || return 1
+  [ "${#hex}" -eq 40 ] || return 1
+  [ "${hex:0:8}" = 7f454c46 ] && [ "${hex:8:2}" = 02 ] && [ "${hex:10:2}" = 01 ] &&
+    [ "${hex:36:4}" = "$machine" ]
+}
+
+# wi_regular <file> : not a symlink and a regular file
+wi_regular() { [ ! -L "$1" ] && [ -f "$1" ]; }
+
+# wi_source_ok <file> : regular file, owned by the web user, one link, at most 100 MB
+wi_source_ok() {
+  local owner links size kind
+  [ ! -L "$1" ] || return 1
+  read -r owner links size kind < <(stat -c '%U %h %s %F' -- "$1") || return 1
+  [ "$kind" = "regular file" ] || [ "$kind" = "regular empty file" ] || return 1
+  [ "$owner" = "$WI_USER" ] && [ "$links" = 1 ] || return 1
+  [[ $size =~ ^[0-9]{1,12}$ ]] && [ "$size" -le "$WI_MAX_BYTES" ]
+}
+
 [ $# -ge 1 ] || usage "missing command"
 cmd=$1
 shift
@@ -347,6 +391,37 @@ case "$cmd" in
       exit 3
     fi
     printf '%s\n' "${BASH_REMATCH[1]}"
+    ;;
+  # Copies the staged binary to a root folder, checks the copy, and starts the install script in
+  # its own unit (the web service restarts during the install and must not stop it).
+  webui-install)
+    [ $# -eq 1 ] || usage "'webui-install' needs one version"
+    ver_re='^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$'
+    [[ $1 =~ $ver_re ]] || usage "invalid version"
+    wi_src=$WI_UPDATE/emulationstation-web
+    wi_source_ok "$wi_src" || usage "the update file is not allowed"
+    if systemctl is-active --quiet emulationstation-webui-install; then
+      printf 'priv: an install is already running\n' >&2
+      exit 1
+    fi
+    install -d -m 0700 "${WI_OWNER[@]}" "$WI_INSTALL" || exit 1
+    rm -f -- "$WI_INSTALL/new" "$WI_INSTALL/new.tmp"
+    # The web user can grow the file or swap in a FIFO after the checks. Limit the size and the time.
+    # A copy that fails or takes too long is refused with exit 2.
+    if ! (ulimit -f $((WI_MAX_BYTES / 1024)) && exec timeout 120 cp --no-dereference -- "$wi_src" "$WI_INSTALL/new.tmp"); then
+      rm -f -- "$WI_INSTALL/new.tmp"
+      usage "the update file could not be copied"
+    fi
+    if ! wi_regular "$WI_INSTALL/new.tmp" || [ "$(wc -c <"$WI_INSTALL/new.tmp")" -gt "$WI_MAX_BYTES" ] ||
+      ! wi_elf_ok "$WI_INSTALL/new.tmp"; then
+      rm -f -- "$WI_INSTALL/new.tmp"
+      usage "the update file is not a program for this device"
+    fi
+    # Only now, after the -L check, the copy is stable (the folder is root only): set the mode.
+    chmod 0755 -- "$WI_INSTALL/new.tmp" || { rm -f -- "$WI_INSTALL/new.tmp"; exit 1; }
+    mv -f -- "$WI_INSTALL/new.tmp" "$WI_INSTALL/new" || exit 1
+    systemd-run --unit=emulationstation-webui-install --collect --no-block \
+      /usr/local/lib/emulationstation/webui-install "$1" || exit 1
     ;;
   *) usage "unknown command" ;;
 esac

@@ -77,6 +77,8 @@ Edit `build.conf`. The file is plain `KEY=VALUE`. Values are not executed.
 - `SOURCE_URL`: the link to the source code in the footer of the web UI (AGPL-3.0, section 13).
   The default is this repository. If you publish a changed version, enter the URL of your fork.
   Empty means no link.
+- `WEBUI_UPDATE_URL`, `WEBUI_UPDATE_SIGNERS`, `WEBUI_UPDATE_SSH_KEY`, `WEBUI_UPDATE_KNOWN_HOSTS`
+  (optional): the self-update of the web UI. See [Web UI self-update](#web-ui-self-update).
 - `WIFI_SSID`, `WIFI_PASSWORD`, `WIFI_COUNTRY` (optional): Wi-Fi. Empty means LAN with DHCP.
   The image connects to this network at boot (WPA2/WPA3 personal; open networks are not supported).
   On the Raspberry Pi, Wi-Fi is on from the first boot (the build and the first boot turn the
@@ -319,6 +321,69 @@ To keep the Pi cooler, open the System page, tab "CPU", and choose a top CPU spe
 Lower speeds make heavy games slower. A heat sink or a fan helps more than a lower speed.
 The web UI never changes `config.txt` and never sets a speed above the board's own top speed.
 The VM images do not show the tab.
+
+## Web UI self-update
+
+The web UI can update itself from a Git repository, so you do not need a new image for a new web
+UI version.
+
+How it works:
+
+- Every 4 hours (the first check 2 minutes after the start) the web UI looks for tags named
+  `webui-v<major>.<minor>.<patch>`, for example `webui-v0.1.2`. If the highest tag is newer than
+  the running version, every page shows a note, and the System page has the button "Update now".
+- The update needs a click of a logged-in user. It clones the tag, builds the new binary on the
+  device, swaps it in and restarts the service. This takes 5 to 15 minutes. It needs 1.5 GB of
+  free space under `/var/lib/emulationstation-web`. The browser reloads by itself after the
+  restart.
+- Jobs that wait behind a running update (uploads, scrapes) are stopped by the restart. Start them
+  after the update.
+- After the restart the new service must answer a health check within 60 seconds. If it does not,
+  the old binary is put back automatically, and the System page says "The update failed. The old
+  version runs again."
+- The version of the running binary is shown on the System page. On the device you can also run
+  `emulationstation-web version`. A build without a `webui-v*` tag has the version `0.0.0`.
+
+Keys in `build.conf` (all optional):
+
+- `WEBUI_UPDATE_URL`: the repository. The default is this repository. Empty turns the self-update
+  off. Allowed: `https://host/path`, `ssh://[user@]host[:port]/path`, `user@host:path`,
+  `file:///folder` and `/folder` (a local repository). The folder must be mounted all the time,
+  for example an NFS mount or a fixed mount in `/etc/fstab`. A USB stick works only if it is
+  mounted for good. The web UI mounts sticks only during an import, at `/run/emulationstation-usb`.
+  User info in an `https://` URL is not allowed.
+- `WEBUI_UPDATE_SIGNERS`: a file in this repository (for example `update-keys/allowed_signers`).
+  If it is set, a tag must have a valid SSH signature from a key in this file. Lightweight
+  (unsigned) tags work only when no signers file is set.
+- `WEBUI_UPDATE_SSH_KEY` and `WEBUI_UPDATE_KNOWN_HOSTS`: a private key without a passphrase (use a
+  read-only deploy key) and a `known_hosts` file for the SSH host. If you set the key, you must set
+  `known_hosts` too.
+
+The three file paths are relative to this repository (no absolute paths). They must be regular files inside it, not in `secrets/` or `out/`,
+and not symlinks. Put them into the folder `update-keys/` (it is ignored by git). The files go
+into the image: the signers file to `/etc/emulationstation-web/update-signers`, the key and
+`known_hosts` to `/home/emulationstation/.ssh/` (mode 0600). Without these keys in `build.conf`,
+you can still put a key into `~/.ssh` on the device by hand and set the paths in `web.conf`.
+
+Make a signed tag (SSH signatures):
+
+```bash
+git config gpg.format ssh
+git config user.signingkey ~/.ssh/id_ed25519.pub
+git tag -s webui-v0.1.2 -m "Web UI 0.1.2"
+git push origin webui-v0.1.2
+```
+
+The `allowed_signers` file has one line per key: `<email> <key type> <public key>`, for example
+`me@example.org ssh-ed25519 AAAA...`. Add `namespaces="git"` after the email if you want to limit
+the key to Git. The tag must be an annotated, signed tag.
+
+On the device, the keys `UPDATE_URL`, `UPDATE_SIGNERS_FILE`, `UPDATE_SSH_KEY_FILE` and
+`UPDATE_KNOWN_HOSTS_FILE` in `/etc/emulationstation-web/web.conf` hold these values. They are read
+when the service starts, so restart the service after you edit `web.conf`.
+
+If the update fails, nothing is lost: the work folder is deleted, and the old version runs. Look
+at `journalctl -u emulationstation-web` for the reason.
 
 ## Custom web UI
 

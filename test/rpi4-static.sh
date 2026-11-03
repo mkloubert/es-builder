@@ -368,6 +368,7 @@ checks_app() {
   checks_units
   checks_firstboot
   checks_usb
+  checks_webui_update
   check "emulationstation-cpu.service enabled" is_wanted multi-user.target emulationstation-cpu.service
   check "Wi-Fi radio on (rfkill state 0, WirelessEnabled=true)" wifi_radio_on
 }

@@ -69,6 +69,38 @@ func TestSourceURLEmptyAllowedAndRoundTrips(t *testing.T) {
 	}
 }
 
+func TestUpdateKeysDefaultEmptyAndRoundTrip(t *testing.T) {
+	d := Default()
+	if d.UpdateURL != "" || d.UpdateSignersFile != "" || d.UpdateSSHKeyFile != "" || d.UpdateKnownHostsFile != "" {
+		t.Fatalf("defaults not empty: %+v", d)
+	}
+	p := filepath.Join(t.TempDir(), "web.conf")
+	if err := os.WriteFile(p, []byte("WEB_USER=u\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.UpdateURL != "" || c.UpdateSignersFile != "" {
+		t.Errorf("missing keys must give empty values: %+v", c)
+	}
+	c.UpdateURL = "https://example.org/r.git"
+	c.UpdateSignersFile = "/etc/s"
+	c.UpdateSSHKeyFile = "/home/k"
+	c.UpdateKnownHostsFile = "/home/kh"
+	if err := c.Save(p); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UpdateURL != c.UpdateURL || got.UpdateSignersFile != "/etc/s" || got.UpdateSSHKeyFile != "/home/k" || got.UpdateKnownHostsFile != "/home/kh" {
+		t.Errorf("round trip: %+v", got)
+	}
+}
+
 func TestSaveLoadRoundTrip(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "web.conf")
 	c := Default()

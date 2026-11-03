@@ -304,3 +304,26 @@ See the design in `docs/superpowers/specs/2026-10-28-usb-import-design.md`. You 
 - [ ] After "Eject" or the end of a job, the stick can be pulled out without a file system
   warning on the PC.
 - [ ] `import-report.txt` on the stick lists each file with its status.
+
+## 11. Web UI self-update
+
+Needs a Git repository with a tag `webui-vX.Y.Z` that is newer than the image (see README.md,
+"Web UI self-update").
+
+- [ ] Real update on a Pi 4 (2 GB): click "Update now". Expected: the update ends with "Web UI
+  updated to X.Y.Z." and the browser reloads by itself. Note the time and the memory use
+  (`free -m` during the build). Repeat on a 1 GB model if you have one.
+- [ ] After the update, `/run/emulationstation/webui-update.status` is owned by `emulationstation`
+  (the `setpriv` write works on a real image), and the System page shows the result once. After a
+  reload the message is gone.
+- [ ] Note how long the Pi 4 needs to come back after the restart. Expected: well inside the 60 s
+  health check budget.
+- [ ] A broken tag (the binary exits at once): the update rolls back. Expected: "The update failed.
+  The old version runs again.", the old version runs, and `/usr/local/bin/emulationstation-web`
+  is the old binary.
+- [ ] Update from a repository on an NFS mount or a fixed mount (`WEBUI_UPDATE_URL=/mnt/...`).
+  A USB stick must be mounted for good (for example with fstab). The web UI mounts sticks only
+  during an import.
+- [ ] Update with an SSH URL and a deploy key (`WEBUI_UPDATE_SSH_KEY` and
+  `WEBUI_UPDATE_KNOWN_HOSTS`). Expected: the check and the update work, and the key file is
+  `0600`, owned by `emulationstation`.

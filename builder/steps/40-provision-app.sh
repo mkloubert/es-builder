@@ -45,7 +45,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 # Values the app scripts may need (all CFG_* keys without the upstream pins and image URLs).
 APP_ENV_KEYS="USER_PASSWORD USER_SSH_PUBKEY WEB_USER WEB_PASSWORD SCREENSCRAPER_USER \
 SCREENSCRAPER_PASSWORD HOSTNAME LOCALE TIMEZONE KEYMAP WIFI_SSID WIFI_PASSWORD WIFI_COUNTRY \
-TLS_EXTRA_SANS SOURCE_URL ES_AUTOSTART"
+TLS_EXTRA_SANS SOURCE_URL ES_AUTOSTART WEBUI_UPDATE_URL"
 
 # app_write_env <file> : KEY="VALUE" lines, mode 0600 from the start. Values are always
 # quoted: config_load removes exactly one pair of quotes, so a value that itself starts and
@@ -112,8 +112,31 @@ app_stage_provision() {
   fi
   # the owner's own web UI files for app-30-webui.sh
   app_stage_webui_custom "$ROOT/webui-custom" "$prov/webui-custom"
+  app_stage_update_files "$prov/update-files"
   cp "$ROOT/builder/lib/log.sh" "$ROOT/builder/lib/config.sh" "$ROOT/builder/lib/webconf.sh" "$prov/lib/"
   app_write_env "$prov/build.env"
+}
+
+# app_stage_update_files <dst> : copies the files of the self-update options (CFG_WEBUI_UPDATE_SIGNERS,
+# _SSH_KEY, _KNOWN_HOSTS) to <dst>/signers, <dst>/ssh-key and <dst>/known_hosts for app-30-webui.sh.
+# Only files that are set are copied. The paths are relative to the repository (config.sh checked
+# them). The folder is 0700 and the files keep no owner. It is removed with the provision folder.
+app_stage_update_files() {
+  local dst=${1:?} pair key name f
+  mkdir -p "$dst"
+  chmod 0700 "$dst"
+  for pair in "WEBUI_UPDATE_SIGNERS:signers" "WEBUI_UPDATE_SSH_KEY:ssh-key" "WEBUI_UPDATE_KNOWN_HOSTS:known_hosts"; do
+    key=CFG_${pair%%:*}
+    name=${pair#*:}
+    f=${!key-}
+    [ -n "$f" ] || continue
+    f=${f#"$ROOT"/}
+    if [ ! -f "$ROOT/$f" ] || [ -L "$ROOT/$f" ]; then
+      die "${pair%%:*}: not a regular file: $f"
+    fi
+    cp -- "$ROOT/$f" "$dst/$name"
+    chmod 0600 "$dst/$name"
+  done
 }
 
 # app_stage_webui_custom <src> <dst> : copies templates/ and static/ of the custom web UI folder
@@ -165,6 +188,18 @@ app_stage_webui_custom() {
 #  - copies the CA certificate (not the key) to $ROOT/out/emulationstation-ca.crt.
 # Owner and mode of the web files are set later by provision/common/app-30-webui.sh in the chroot
 # (the user emulationstation does not exist on the host). The CA key is never copied to the target.
+# app_web_version <repo> : prints the web UI version x.y.z from the highest tag webui-vX.Y.Z that
+# is reachable from HEAD. Prints 0.0.0 if there is no tag or no git repository. Never fails.
+# safe.directory is needed because the repository is a bind mount owned by another user.
+app_web_version() {
+  local repo=${1:?} re='^webui-v(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$' v=""
+  if [ -e "$repo/.git" ]; then
+    v=$(git -c safe.directory="$repo" -C "$repo" tag --merged HEAD --list 'webui-v*' 2>/dev/null |
+      grep -E "$re" | sed 's/^webui-v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1) || v=""
+  fi
+  printf '%s\n' "${v:-0.0.0}"
+}
+
 # app_build_web <arch> <out> : builds the web binary from a temporary copy of webui/. The build
 # writes internal/web/static/app.css; in the repository (a bind mount) that file would then belong
 # to root on a Linux host, and a later local build would fail.
@@ -179,7 +214,7 @@ app_build_web() {
   if [ -d "$ROOT/webui-custom/templates" ]; then
     cp -a "$ROOT/webui-custom/templates/." "$src/custom/templates/"
   fi
-  sh "$src/scripts/build.sh" "$arch" "$out" ||
+  sh "$src/scripts/build.sh" "$arch" "$out" "$(app_web_version "$ROOT")" ||
     die "Building the web service failed (webui/scripts/build.sh $arch)"
   rm -rf "${src:?}"
 }
@@ -231,6 +266,7 @@ main() {
   # cleanup stack (LIFO): shred build.env, provision directory (also on abort), then chroot, then mounts
   cleanup_push rm -rf "$prov"
   cleanup_push app_shred_env "$prov/build.env"
+  cleanup_push app_shred_env "$prov/update-files/ssh-key"
 
   log_info "Copying overlay/"
   app_copy_overlay "$ROOT/overlay" "$TARGET_MNT"

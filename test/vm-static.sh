@@ -387,6 +387,7 @@ checks_app() {
   checks_units
   checks_firstboot
   checks_usb
+  checks_webui_update
   check "emulationstation-cpu.service not enabled (Pi 4 only)" not_wanted_cpu
   check "flycast: OpenGL 4.3 override for virgl (when flycast is installed)" flycast_gl_ok
 }

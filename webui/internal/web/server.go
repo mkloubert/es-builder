@@ -40,6 +40,7 @@ import (
 	"emulationstation/webui/internal/roms"
 	"emulationstation/webui/internal/sysinfo"
 	"emulationstation/webui/internal/systems"
+	"emulationstation/webui/internal/update"
 	"emulationstation/webui/internal/usb"
 )
 
@@ -61,7 +62,10 @@ type Deps struct {
 	Runner       priv.Runner
 	LogW         io.Writer
 	SysRoot      string
-	MountInfo    string // mount list to check for a mounted USB stick; "" = /proc/self/mountinfo
+	MountInfo    string          // mount list to check for a mounted USB stick; "" = /proc/self/mountinfo
+	Update       *update.Updater // nil = self-update is off
+	Checker      *update.Checker // nil = self-update is off
+	Version      string          // running web UI version x.y.z
 }
 
 // Server holds the handler state.
@@ -76,6 +80,9 @@ type Server struct {
 	powering atomic.Bool // a reboot/poweroff is pending
 	scan     btScan      // the single background Bluetooth scan
 	usbMu    sync.Mutex  // makes "is a USB import running?" and the submit (or the eject) one step
+
+	flashMu sync.Mutex // serializes the read of the install status file
+	updMu   sync.Mutex // makes "is an update running?" and the submit one step
 }
 
 func (s *Server) logf(format string, a ...any) {
@@ -101,7 +108,8 @@ func securityHeaders(next http.Handler) http.Handler {
 
 // NewHandler builds the full handler chain:
 // gzip -> security headers -> CrossOriginProtection -> auth.Middleware -> mux,
-// so that 401/403 responses carry the headers too.
+// so that 401/403 responses carry the headers too. Only GET /healthz is in
+// front of auth.Middleware (the handler allows loopback clients only).
 // It panics if the embedded templates are broken (a build-time bug).
 func NewHandler(d Deps) http.Handler {
 	_, h := newServer(d)
@@ -114,7 +122,10 @@ func newServer(d Deps) (*Server, http.Handler) {
 	s.loadTemplates()
 	mux := http.NewServeMux()
 	s.routes(mux)
-	return s, gzipHandler(securityHeaders(http.NewCrossOriginProtection().Handler(auth.Middleware(d.Config, d.LogW, mux))))
+	outer := http.NewServeMux()
+	outer.HandleFunc("GET /healthz", s.handleHealthz)
+	outer.Handle("/", auth.Middleware(d.Config, d.LogW, mux))
+	return s, gzipHandler(securityHeaders(http.NewCrossOriginProtection().Handler(outer)))
 }
 
 func (s *Server) routes(mux *http.ServeMux) {
@@ -139,6 +150,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.biosRoutes(mux)
 	s.controllerRoutes(mux)
 	s.systemRoutes(mux)
+	s.updateRoutes(mux)
 	s.settingsRoutes(mux)
 }
 

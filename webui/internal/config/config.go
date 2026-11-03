@@ -62,6 +62,10 @@ type Config struct {
 	USBMaxFiles                          int    // most files on one USB stick per import
 	SourceURL                            string // AGPL section 13 source link; empty = no link
 	UIDir                                string // custom web UI files (templates/, static/); empty = off
+	UpdateURL                            string // git URL for web UI self-update; empty = off
+	UpdateSignersFile                    string // allowed signers file; empty = tags are not checked
+	UpdateSSHKeyFile                     string // SSH key for the update URL; empty = default
+	UpdateKnownHostsFile                 string // known_hosts file for the update URL
 	Paths                                Paths
 }
 
@@ -153,6 +157,10 @@ func Load(path string) (*Config, error) {
 	set("TLS_KEY", &c.TLSKey)
 	set("SOURCE_URL", &c.SourceURL)
 	set("UI_DIR", &c.UIDir)
+	set("UPDATE_URL", &c.UpdateURL)
+	set("UPDATE_SIGNERS_FILE", &c.UpdateSignersFile)
+	set("UPDATE_SSH_KEY_FILE", &c.UpdateSSHKeyFile)
+	set("UPDATE_KNOWN_HOSTS_FILE", &c.UpdateKnownHostsFile)
 
 	num := func(key string) (int64, bool, error) {
 		v, ok := vals[key]
@@ -209,6 +217,10 @@ func (c *Config) Save(path string) error {
 		{"ES_SYSTEMS_CFG", c.Paths.ESSystemsCfg},
 		{"SOURCE_URL", c.SourceURL},
 		{"UI_DIR", c.UIDir},
+		{"UPDATE_URL", c.UpdateURL},
+		{"UPDATE_SIGNERS_FILE", c.UpdateSignersFile},
+		{"UPDATE_SSH_KEY_FILE", c.UpdateSSHKeyFile},
+		{"UPDATE_KNOWN_HOSTS_FILE", c.UpdateKnownHostsFile},
 	}
 	var b strings.Builder
 	for _, p := range pairs {

@@ -136,6 +136,23 @@ need_real_tools() {
   [[ "$output" == *"  a.img.xz  6 bytes"*"sha256:5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"* ]]
 }
 
+@test "finalize_report_section: web UI version and self-update URL, or off" {
+  load_step
+  local repo="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$repo"
+  git -C "$repo" init -q
+  git -C "$repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m x
+  git -C "$repo" tag webui-v0.1.2
+  ROOT="$repo"
+  : >"$BATS_TEST_TMPDIR/r.txt"
+  CFG_WEBUI_UPDATE_URL=https://github.com/mkloubert/es-builder
+  run finalize_report_section rpi4 20261028 abc "$BATS_TEST_TMPDIR/r.txt"
+  [[ "$output" == *"web UI version: 0.1.2, self-update: https://github.com/mkloubert/es-builder"* ]]
+  CFG_WEBUI_UPDATE_URL=""
+  run finalize_report_section rpi4 20261028 abc "$BATS_TEST_TMPDIR/r.txt"
+  [[ "$output" == *"web UI version: 0.1.2, self-update: off"* ]]
+}
+
 @test "finalize_report_section: VM targets say the qcow2 virtual size and to enlarge the raw" {
   load_step
   [ "$FINALIZE_QCOW2_SIZE" = 16G ]

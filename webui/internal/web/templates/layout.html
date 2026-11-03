@@ -98,11 +98,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     Please renew it, or browsers will warn about the connection.</span>
   </div>
   {{end}}
+  {{if .UpdateReady}}
+  <div role="status" class="banner banner-info border-x-0 border-t-0 px-4 md:px-6">
+    {{icon "download"}}
+    <a href="/system#webui" class="underline underline-offset-4">Web UI version {{.UpdateReady}} is ready. Open System to update.</a>
+  </div>
+  {{end}}
   <main id="content" tabindex="-1" class="mx-auto max-w-6xl px-4 pt-6 pb-12 focus:outline-none md:px-6 md:pt-8">
     <div class="mb-6 md:mb-8">
       <h1 class="font-display text-[40px] leading-[0.9] tracking-[0.02em] md:text-[56px]">{{.Title}}</h1>
       <p class="mt-2 text-[13px] text-muted empty:hidden">{{block "subtitle" .}}{{end}}</p>
     </div>
+    {{if .Flash}}{{template "flash" .Flash}}<div class="mb-4"></div>{{end}}
     {{template "content" .}}
   </main>
   <footer id="legal" class="legal mx-auto max-w-6xl border-t border-line px-4 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:hidden">{{template "layout-legal" .}}</footer>

@@ -49,7 +49,11 @@ setup() {
   # custom web UI folder and its web.conf key (spec 2026-10-31-webui-custom-design.md 3.2)
   mkdir -p "$R/home/emulationstation/webui-custom/static" "$R/etc/emulationstation-web"
   echo x >"$R/home/emulationstation/webui-custom/static/a.css"
-  printf 'WEB_USER=u\nUI_DIR=/home/emulationstation/webui-custom\n' >"$R/etc/emulationstation-web/web.conf"
+  printf 'WEB_USER=u\nUI_DIR=/home/emulationstation/webui-custom\nUPDATE_URL=https://example.org/a\nUPDATE_SIGNERS_FILE=\nUPDATE_SSH_KEY_FILE=\nUPDATE_KNOWN_HOSTS_FILE=\n' >"$R/etc/emulationstation-web/web.conf"
+  # the web binary is a script that prints its version (a real ELF binary needs the host CPU)
+  mkdir -p "$R/usr/local/bin"
+  printf '#!/bin/sh\n[ "$1" = version ] && echo 0.1.2\n' >"$R/usr/local/bin/emulationstation-web"
+  chmod 755 "$R/usr/local/bin/emulationstation-web"
   cp "$ROOT/overlay/boot-template/emulationstation.txt.example" "$R/boot/firmware/"
   cp "$ROOT/overlay/boot-template/emulationstation.txt.example" "$R/boot/efi/"
   printf 'TARGET_KIND=rpi4\nBOOT_DIR=/boot/firmware\n' >"$R/usr/local/lib/emulationstation/firstboot.conf"
@@ -317,4 +321,44 @@ shared_lines() {
   echo 'ListenStream=1234' >>"$R/etc/systemd/system/emulationstation-cpu.service"
   run shared_lines rpi4-static.sh
   [[ $output == *"FAIL: emulationstation-cpu.service: oneshot priv cpu-apply"* ]]
+}
+
+@test "self-update checks: pass on a good fake root; SKIP without a key file" {
+  run shared_lines rpi4-static.sh
+  [[ $output == *"PASS: webui-install: root file, mode 755"* ]]
+  [[ $output == *"PASS: web.conf: UPDATE_URL present"* ]]
+  [[ $output == *"PASS: web.conf: UPDATE_KNOWN_HOSTS_FILE present"* ]]
+  [[ $output == *"PASS: emulationstation-web version prints x.y.z"* ]]
+  [[ $output == *"SKIP: self-update SSH key"* ]]
+}
+
+@test "self-update checks: wrong mode, missing key, bad version output fail" {
+  chmod 700 "$R/usr/local/lib/emulationstation/webui-install"
+  sed -i '/^UPDATE_URL=/d' "$R/etc/emulationstation-web/web.conf"
+  printf '#!/bin/sh\necho dev\n' >"$R/usr/local/bin/emulationstation-web"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"FAIL: webui-install: root file, mode 755"* ]]
+  [[ $output == *"FAIL: web.conf: UPDATE_URL present"* ]]
+  [[ $output == *"FAIL: emulationstation-web version prints x.y.z"* ]]
+}
+
+@test "self-update checks: a binary for another CPU is skipped with a SKIP line" {
+  printf '#!/bin/sh\necho "ELF 64-bit LSB executable, MIPS"\n' >"$BATS_TEST_TMPDIR/bin/file"
+  chmod 755 "$BATS_TEST_TMPDIR/bin/file"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"SKIP: emulationstation-web version (the binary is for another CPU"* ]]
+}
+
+@test "self-update checks: .ssh modes are checked when a key file exists" {
+  local ssh="$R/home/emulationstation/.ssh"
+  mkdir -p "$ssh"
+  : >"$ssh/webui-update"
+  : >"$ssh/webui-update-known_hosts"
+  chmod 700 "$ssh"
+  chmod 600 "$ssh/webui-update" "$ssh/webui-update-known_hosts"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"PASS: self-update SSH key: .ssh 700"* ]]
+  chmod 644 "$ssh/webui-update"
+  run shared_lines rpi4-static.sh
+  [[ $output == *"FAIL: self-update SSH key: .ssh 700"* ]]
 }

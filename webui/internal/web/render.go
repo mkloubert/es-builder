@@ -85,6 +85,8 @@ type Page struct {
 	CertWarning  bool
 	CertDaysLeft int
 	SourceURL    string // validated http(s) source link for the footer; "" = none
+	UpdateReady  string // newer web UI version found by the last check; "" = none
+	Flash        string // one-time message (result of a web UI update); "" = none
 	Data         any
 }
 
@@ -334,6 +336,8 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request, name, title string
 	if cfg := s.d.Config(); cfg != nil {
 		p.SourceURL = safeSourceURL(cfg.SourceURL)
 	}
+	p.UpdateReady = s.readyVersion()
+	p.Flash = s.takeFlash()
 	if info, _ := s.d.Sysinfo.Collect(s.now()); info.HasCert && info.CertDaysLeft < certWarnDays {
 		p.CertWarning, p.CertDaysLeft = true, info.CertDaysLeft
 	}

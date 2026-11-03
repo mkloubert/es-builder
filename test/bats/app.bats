@@ -133,6 +133,58 @@ EOF2
   grep -qx 'USER_PASSWORD="secret"' "$p/build.env"
 }
 
+@test "app_write_env: WEBUI_UPDATE_URL is in build.env, the update file paths are not" {
+  load_step
+  CFG_WEBUI_UPDATE_URL=https://example.org/a/b CFG_WEBUI_UPDATE_SSH_KEY=update-keys/key
+  local f="$BATS_TEST_TMPDIR/build.env"
+  app_write_env "$f"
+  grep -qx 'WEBUI_UPDATE_URL="https://example.org/a/b"' "$f"
+  run ! grep -E 'UPDATE_(SIGNERS|SSH_KEY|KNOWN_HOSTS)' "$f"
+}
+
+@test "app_stage_update_files: copies only the set files, dir 0700, files 0600" {
+  load_step
+  local d="$BATS_TEST_TMPDIR/uf"
+  ROOT="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$ROOT/update-keys"
+  printf 'k\n' >"$ROOT/update-keys/key"
+  printf 'h\n' >"$ROOT/update-keys/hosts"
+  CFG_WEBUI_UPDATE_SIGNERS="" CFG_WEBUI_UPDATE_SSH_KEY=update-keys/key CFG_WEBUI_UPDATE_KNOWN_HOSTS="$ROOT/update-keys/hosts"
+  app_stage_update_files "$d"
+  [ "$(stat -c %a "$d")" = 700 ]
+  [ "$(cat "$d/ssh-key")" = k ]
+  [ "$(cat "$d/known_hosts")" = h ]
+  [ "$(stat -c %a "$d/ssh-key")" = 600 ]
+  [ ! -e "$d/signers" ]
+}
+
+@test "app_stage_update_files: nothing set -> empty folder; a missing file or symlink stops the build" {
+  load_step
+  local d="$BATS_TEST_TMPDIR/uf"
+  ROOT="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$ROOT"
+  CFG_WEBUI_UPDATE_SIGNERS="" CFG_WEBUI_UPDATE_SSH_KEY="" CFG_WEBUI_UPDATE_KNOWN_HOSTS=""
+  app_stage_update_files "$d"
+  [ -z "$(ls -A "$d")" ]
+  CFG_WEBUI_UPDATE_SIGNERS=missing
+  run app_stage_update_files "$d"
+  [ "$status" -ne 0 ]
+  printf 's\n' >"$ROOT/real"
+  ln -s real "$ROOT/link"
+  CFG_WEBUI_UPDATE_SIGNERS=link
+  run app_stage_update_files "$d"
+  [ "$status" -ne 0 ]
+}
+
+@test "app_stage_provision: update-files folder exists in the provision folder" {
+  load_step
+  local root="$BATS_TEST_TMPDIR/root"
+  mkdir -p "$root"
+  CFG_USER_PASSWORD=secret
+  app_stage_provision "$root" rpi4
+  [ -d "$root/root/provision/update-files" ]
+}
+
 # --- app-10-security.sh --------------------------------------------------------
 
 security_root() {
@@ -528,4 +580,57 @@ EOF2
   grep -qx 'WantedBy=multi-user.target' "$u"
   run grep -E 'Listen|Socket|Port' "$u"
   [ "$status" -ne 0 ]
+}
+
+# --- Web UI version from git tags ------------------------------------------------
+
+# mk_tag_repo <dir> : git repo with one commit; tags are added by the test.
+mk_tag_repo() {
+  mkdir -p "$1"
+  git -C "$1" init -q
+  git -C "$1" -c user.name=t -c user.email=t@t commit -q --allow-empty -m one
+}
+
+@test "app_web_version: highest webui-v tag by number, other tags ignored" {
+  load_step
+  local r="$BATS_TEST_TMPDIR/repo"
+  mk_tag_repo "$r"
+  git -C "$r" tag webui-v0.1.2
+  git -C "$r" tag webui-v0.1.10
+  git -C "$r" tag webui-v0.1.9
+  git -C "$r" tag other-v9.0.0
+  git -C "$r" tag webui-v1.2.3-rc1
+  run app_web_version "$r"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0.1.10" ]
+}
+
+@test "app_web_version: no tag -> 0.0.0" {
+  load_step
+  local r="$BATS_TEST_TMPDIR/repo"
+  mk_tag_repo "$r"
+  run app_web_version "$r"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0.0.0" ]
+}
+
+@test "app_web_version: no .git -> 0.0.0" {
+  load_step
+  mkdir -p "$BATS_TEST_TMPDIR/plain"
+  run app_web_version "$BATS_TEST_TMPDIR/plain"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0.0.0" ]
+}
+
+@test "app_web_version: a tag that HEAD does not contain is ignored" {
+  load_step
+  local r="$BATS_TEST_TMPDIR/repo"
+  mk_tag_repo "$r"
+  git -C "$r" tag webui-v0.1.2
+  git -C "$r" checkout -q -b side
+  git -C "$r" -c user.name=t -c user.email=t@t commit -q --allow-empty -m two
+  git -C "$r" tag webui-v0.9.0
+  git -C "$r" checkout -q -
+  run app_web_version "$r"
+  [ "$output" = "0.1.2" ]
 }

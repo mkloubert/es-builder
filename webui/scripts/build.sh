@@ -15,14 +15,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Usage: scripts/build.sh <GOARCH> <out>
+# Usage: scripts/build.sh <GOARCH> <out> [<version>]
 # Builds the Tailwind stylesheet and a static linux binary.
 # The Tailwind CLI is taken from $TAILWINDCSS (default: tailwindcss on PATH).
 set -eu
-if [ $# -ne 2 ]; then
-	echo "usage: $0 <GOARCH> <out>" >&2
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+	echo "usage: $0 <GOARCH> <out> [<version>]" >&2
 	exit 2
 fi
 cd "$(dirname "$0")/.."
 ${TAILWINDCSS:-tailwindcss} -i assets/input.css -o internal/web/static/app.css --minify
-CGO_ENABLED=0 GOOS=linux GOARCH="$1" go build -buildvcs=false -trimpath -ldflags "-s -w" -o "$2" ./cmd/emulationstation-web
+CGO_ENABLED=0 GOOS=linux GOARCH="$1" go build -buildvcs=false -trimpath -ldflags "-s -w -X main.version=${3:-0.0.0}" -o "$2" ./cmd/emulationstation-web

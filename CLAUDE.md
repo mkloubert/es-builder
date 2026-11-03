@@ -25,7 +25,9 @@ Go web UI (`webui/`) on HTTPS port 11944 to manage ROMs, BIOS files, controllers
 6. **Secrets.** Never write passwords into an image as plain text. The one exception is the
    ScreenScraper password, which is stored in `web.conf` (mode 0600) by design. The web password is
    stored only as a hash (`WEB_PASSWORD_HASH`). `builder/lib/webconf.sh` makes the build fail if the
-   plain web password appears in `web.conf`. Never put `secrets/` (the CA key) into an image.
+   plain web password appears in `web.conf`. The second plain secret by design is the SSH deploy
+   key for web UI updates (`/home/emulationstation/.ssh/webui-update`, mode 0600). Never put
+   `secrets/` (the CA key) into an image.
 7. **Spec first.** For new features or changes to behaviour, change or add a spec in
    `docs/superpowers/specs/` first, then a plan in `docs/superpowers/plans/`. If the code and the
    spec disagree, the spec wins, unless the owner decides otherwise.
@@ -109,7 +111,8 @@ out/, secrets/            build output and CA key (git-ignored, written on the h
   `tailwindcss -i assets/input.css -o internal/web/static/app.css --minify`
   (see `webui/scripts/build.sh`). It must exist before `go build` or `go test`.
 - Packages: `auth` (Basic Auth + ban after 5 failures), `config` (web.conf), `web` (handlers, SSE,
-  gzip), `jobs` (background jobs with progress), `roms` (staging/commit of uploads), `usb` (stick
+  gzip), `jobs` (background jobs with progress), `update` (self-update: tags, URL check, clone,
+  build, health check; its own `Runner`), `roms` (staging/commit of uploads), `usb` (stick
   import), `gamelist`, `names` (name cleaning), `systems` (es_systems.cfg), `scrape` (Skyscraper),
   `bios`, `controllers`, `bluetooth` (D-Bus), `es` (start/stop ES), `priv` (calls the root helper),
   `sysinfo`.
@@ -129,6 +132,9 @@ out/, secrets/            build output and CA key (git-ignored, written on the h
 - Treat every argument as hostile. Check it with strict regexes, check it again inside the helper
   (never trust the caller), and use no `eval`. Never follow symlinks in paths the web user can
   change.
+- `webui-install` (web UI self-update) is a root script in the same folder. The web UI never runs
+  it. `priv webui-install <version>` checks the staged binary and starts the script with
+  `systemd-run` as a transient unit. The script is not in sudoers and runs only from systemd.
 - Exit codes: 0 ok, 1 action failed, 2 bad input or not allowed, 3 could not read state (e.g.
   the device list).
 - A new command needs bats tests in `test/bats/priv.bats` with stubs. Do not change sudoers (the
@@ -175,6 +181,15 @@ out/, secrets/            build output and CA key (git-ignored, written on the h
 - The builder container writes as root into the bind mounts. `owner_fix` in `builder/run.sh`
   gives the files back to the host user, so new output directories must be passed to it.
 - Only one build at a time, because of the flock on the cache volume `emulationstation-cache`.
+- Self-update (spec `2026-11-02-webui-self-update-design.md`): `build.conf` keys `WEBUI_UPDATE_URL`,
+  `WEBUI_UPDATE_SIGNERS`, `WEBUI_UPDATE_SSH_KEY`, `WEBUI_UPDATE_KNOWN_HOSTS` become the `web.conf`
+  keys `UPDATE_URL`, `UPDATE_SIGNERS_FILE`, `UPDATE_SSH_KEY_FILE`, `UPDATE_KNOWN_HOSTS_FILE`. The
+  URL rules exist twice and must stay equal: `webui/internal/update/url.go` and
+  `config_check_update_url` in `builder/lib/config.sh` (both are tested with the same rows). The
+  version comes from the highest `webui-vX.Y.Z` tag (`app_web_version` in step 40). Key files live
+  in `update-keys/` (git-ignored).
+- A new web UI version must start with an old `web.conf` and must check that a `priv` command
+  exists before it uses it. Self-update runs new code on old images.
 - The boot partition file `emulationstation.txt` (see `overlay/boot-template/`) is read by
   `firstboot` at **every** boot, then renamed to `emulationstation.txt.applied` with passwords
   masked. A new key there needs parsing, validation, masking (if secret) and tests
